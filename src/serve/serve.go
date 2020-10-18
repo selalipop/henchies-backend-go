@@ -51,13 +51,13 @@ func main() {
 
 	r.GET("/", controllers.GetInfo)
 
-	r.GET("player/state", controllers.GetPlayerState)
-	r.GET("player/key", controllers.GetPlayerGameKey)
+	r.GET("/player/state", controllers.GetPlayerState)
+	r.GET("/player/key", controllers.GetPlayerGameKey)
 
-	r.GET("game/state", controllers.GetGameState)
+	r.GET("/game/state", controllers.GetGameState)
 
-	r.POST("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
-	r.POST("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
+	r.POST("/photonwebhooks/room-created", controllers.RoomCreatedWebhook)
+	r.POST("/photonwebhooks/player-joined", controllers.PlayerJoinedWebhook)
 
 	err = r.Run()
 	if err != nil {
