@@ -11,6 +11,7 @@ func (env *Controllers) GetGameState(c *gin.Context) {
 	var request schema.GetGameStateRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
+		logrus.Error("failed to parse game state request", err)
 		WriteInvalidRequestResponse(c, err)
 		return
 	}
