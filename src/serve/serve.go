@@ -44,7 +44,7 @@ func main() {
 
 func GetArguments() Arguments {
 	var args Arguments
-	err := envconfig.Process("myapp", &args)
+	err := envconfig.Process("henchies", &args)
 	if err != nil {
 		logrus.Fatal(err.Error())
 	}
