@@ -43,6 +43,8 @@ func main() {
 	r.GET("player/state", controllers.GetPlayerState)
 	r.GET("player/key", controllers.GetPlayerGameKey)
 
+	r.GET("game/state", controllers.GetGameState)
+
 	r.GET("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
 	r.GET("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
 	err := r.Run()
