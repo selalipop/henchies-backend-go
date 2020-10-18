@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -15,7 +16,7 @@ func (env *Controllers) GetGameState(c *gin.Context) {
 		WriteInvalidRequestResponse(c, err)
 		return
 	}
-	stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, request.PlayerKey)
+	stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: c.ClientIP()})
 	defer close(stateChan)
 	if err != nil {
 		logrus.Error("failed to subscribe to game state", err)
