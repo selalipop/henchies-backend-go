@@ -16,7 +16,7 @@ func (env *Controllers) GetGameState(c *gin.Context) {
 		return
 	}
 	stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: c.ClientIP()})
-	defer close(stateChan)
+
 	if err != nil {
 		logrus.Error("failed to subscribe to game state", err)
 		return
@@ -27,6 +27,7 @@ func (env *Controllers) GetGameState(c *gin.Context) {
 			c.SSEvent("game_state_changed", state)
 			return true
 		}
+		close(stateChan)
 		return false
 	})
 }

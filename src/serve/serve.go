@@ -19,14 +19,17 @@ type Arguments struct {
 func main() {
 
 	args := GetArguments()
-	
+
 	redisContext := context.Background()
-	redisOptions := redis.Options{Addr: args.RedisConnectUrl}
-	redisClient := redis.NewClient(&redisOptions)
+	redisOptions, err := redis.ParseURL(args.RedisConnectUrl)
+	if err != nil {
+		logrus.Error("failed to parse Redis Connection Url ", err)
+	}
+	redisClient := redis.NewClient(redisOptions)
 
 	repositoryEnv := RepositoryEnv{
 		RedisClient: redisClient,
-		Context: redisContext,
+		Context:     redisContext,
 	}
 
 	playerRepository := PlayerRepository{repositoryEnv}
