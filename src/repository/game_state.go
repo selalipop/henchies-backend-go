@@ -122,8 +122,8 @@ func (r *GameRepository) SubscribeGameState(gameId GameId, playerId PlayerId, pl
 	send := make(chan GameState)
 
 	go func() {
+		defer close(send)
 		for {
-
 			message := <-listen
 			var gameState GameState
 			err := json.Unmarshal([]byte(message.Payload), &gameState)

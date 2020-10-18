@@ -2,48 +2,46 @@ package controllers
 
 import (
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
+	"github.com/gin-contrib/sse"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
-	"net/http"
+	"io"
+	"strconv"
 )
 
 func (env *Controllers) GetGameState(c *gin.Context) {
-	GetGameStateWSHandler(env, c.Writer, c.Request)
-}
-
-var socketUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
-func GetGameStateWSHandler(env *Controllers, w http.ResponseWriter, r *http.Request) {
-	conn, err := socketUpgrader.Upgrade(w, r, nil)
-
-	if err != nil {
-		logrus.Error("Failed to set websocket upgrade", err)
-		return
-	}
-
 	var request schema.GetGameStateRequest
 
-	if err := conn.ReadJSON(&request); err != nil {
-		logrus.Error("Failed to set game state request", err)
-		_ = conn.WriteJSON(map[string]interface{}{"error" : err.Error()})
+	if err := c.ShouldBindJSON(&request); err != nil {
+		WriteInvalidRequestResponse(c, err)
 		return
 	}
+	c.Stream(func(w io.Writer) bool {
 
-	stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, request.PlayerKey)
+		stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, request.PlayerKey)
+		defer close(stateChan)
 
-	if err != nil {
-		logrus.Error("Failed to subscribe to game state", err)
-		return
-	}
-	for {
-		state := <-stateChan
-		err = conn.WriteJSON(state)
 		if err != nil {
-			break
+			logrus.Error("Failed to set websocket upgrade", err)
+			return false
 		}
-	}
+
+		for {
+			eventId := 0
+
+			state := <-stateChan
+
+			err = sse.Encode(w, sse.Event{
+				Id:    strconv.Itoa(eventId),
+				Event: "game_state_changed",
+				Data:  state,
+			})
+
+			if err != nil {
+				logrus.Error("Failed to set websocket upgrade", err)
+				return true
+			}
+		}
+	})
+
 }
