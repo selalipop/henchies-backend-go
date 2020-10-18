@@ -45,7 +45,7 @@ func main() {
 
 	r.GET("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
 	r.GET("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
-	err := r.Run("127.0.0.1:8080")
+	err := r.Run()
 	if err != nil {
 		logrus.Fatal(err)
 	}
