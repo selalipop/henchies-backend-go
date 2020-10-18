@@ -52,9 +52,10 @@ func main() {
 
 	r.GET("game/state", controllers.GetGameState)
 
-	r.GET("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
-	r.GET("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
-	err := r.Run()
+	r.POST("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
+	r.POST("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
+	
+	err = r.Run()
 	if err != nil {
 		logrus.Fatal(err)
 	}
