@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/controllers"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/repository"
 
@@ -18,13 +19,16 @@ type Arguments struct {
 func main() {
 
 	args := GetArguments()
-
+	
+	redisContext := context.Background()
 	redisOptions := redis.Options{Addr: args.RedisConnectUrl}
 	redisClient := redis.NewClient(&redisOptions)
+
 	repositoryEnv := RepositoryEnv{
 		RedisClient: redisClient,
-		Context:     nil,
+		Context: redisContext,
 	}
+
 	playerRepository := PlayerRepository{repositoryEnv}
 	gameRepository := GameRepository{&playerRepository, repositoryEnv}
 
