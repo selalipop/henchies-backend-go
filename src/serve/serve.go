@@ -25,6 +25,10 @@ func main() {
 	if err != nil {
 		logrus.Error("failed to parse Redis Connection Url ", err)
 	}
+
+	//Required due to DO connection string format
+	redisOptions.Username = ""
+
 	redisClient := redis.NewClient(redisOptions)
 
 	repositoryEnv := RepositoryEnv{
@@ -54,7 +58,7 @@ func main() {
 
 	r.POST("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
 	r.POST("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
-	
+
 	err = r.Run()
 	if err != nil {
 		logrus.Fatal(err)
