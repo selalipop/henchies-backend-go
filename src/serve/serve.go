@@ -3,23 +3,24 @@ package main
 import (
 	. "github.com/SelaliAdobor/henchies-backend-go/src/controllers"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/repository"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"github.com/sirupsen/logrus"
-
 	"github.com/kelseyhightower/envconfig"
+	"github.com/sirupsen/logrus"
+	"github.com/toorop/gin-logrus"
 )
 
 type Arguments struct {
-	RedisConnectUrl     string `required:"true"`
+	RedisConnectUrl string `required:"true"`
 }
 
 func main() {
-	r := gin.New()
 
 	args := GetArguments()
+
 	redisOptions := redis.Options{Addr: args.RedisConnectUrl}
-	redisClient :=  redis.NewClient(&redisOptions)
+	redisClient := redis.NewClient(&redisOptions)
 	repositoryEnv := RepositoryEnv{
 		RedisClient: redisClient,
 		Context:     nil,
@@ -32,6 +33,11 @@ func main() {
 		GameRepository:   gameRepository,
 	}
 
+	r := gin.New()
+
+	log := logrus.New()
+	r.Use(ginlogrus.Logger(log), gin.Recovery())
+
 	r.GET("/", controllers.GetInfo)
 
 	r.GET("player/state", controllers.GetPlayerState)
@@ -39,8 +45,8 @@ func main() {
 
 	r.GET("photon-webhooks/room-created", controllers.RoomCreatedWebhook)
 	r.GET("photon-webhooks/player-joined", controllers.PlayerJoinedWebhook)
-	err := r.Run()
-	if(err != nil){
+	err := r.Run("127.0.0.1:8080")
+	if err != nil {
 		logrus.Fatal(err)
 	}
 }

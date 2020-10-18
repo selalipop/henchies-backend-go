@@ -16,8 +16,9 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/swaggo/files v0.0.0-20190704085106-630677cd5c14 // indirect
-	github.com/swaggo/gin-swagger v1.2.0
+	github.com/swaggo/gin-swagger v1.2.0 // indirect
 	github.com/swaggo/swag v1.6.7 // indirect
+	github.com/toorop/gin-logrus v0.0.0-20200831135515-d2ee50d38dae
 	golang.org/x/net v0.0.0-20201010224723-4f7140c49acb // indirect
 	golang.org/x/tools v0.0.0-20201013015553-ec925d8b1dc6 // indirect
 )
