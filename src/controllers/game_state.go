@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	. "github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -10,13 +9,7 @@ import (
 )
 
 func (env *Controllers) GetGameState(c *gin.Context) {
-	var request schema.GetGameStateRequest
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		WriteInvalidRequestResponse(c, err)
-		return
-	}
-	GetGameStateWSHandler(env, request.GameId, request.PlayerId, request.PlayerKey, c.Writer, c.Request)
+	GetGameStateWSHandler(env, c.Writer, c.Request)
 }
 
 var socketUpgrader = websocket.Upgrader{
@@ -24,7 +17,7 @@ var socketUpgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func GetGameStateWSHandler(env *Controllers, gameId GameId, playerId PlayerId, playerKey PlayerGameKey, w http.ResponseWriter, r *http.Request) {
+func GetGameStateWSHandler(env *Controllers, w http.ResponseWriter, r *http.Request) {
 	conn, err := socketUpgrader.Upgrade(w, r, nil)
 
 	if err != nil {
@@ -32,9 +25,18 @@ func GetGameStateWSHandler(env *Controllers, gameId GameId, playerId PlayerId, p
 		return
 	}
 
-	stateChan, err := env.GameRepository.SubscribeGameState(gameId, playerId, playerKey)
+	var request schema.GetGameStateRequest
+
+	if err := conn.ReadJSON(&request); err != nil {
+		logrus.Error("Failed to set game state request", err)
+		_ = conn.WriteJSON(map[string]interface{}{"error" : err.Error()})
+		return
+	}
+
+	stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, request.PlayerKey)
+
 	if err != nil {
-		logrus.Error("Failed to set websocket upgrade", err)
+		logrus.Error("Failed to subscribe to game state", err)
 		return
 	}
 	for {
