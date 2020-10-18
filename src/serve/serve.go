@@ -31,6 +31,9 @@ func main() {
 		PlayerRepository: playerRepository,
 		GameRepository:   gameRepository,
 	}
+
+	r.GET("/", controllers.GetInfo)
+
 	r.GET("player/state", controllers.GetPlayerState)
 	r.GET("player/key", controllers.GetPlayerGameKey)
 
