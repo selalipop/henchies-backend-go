@@ -56,8 +56,8 @@ func main() {
 
 	r.GET("/game/state", controllers.GetGameState)
 
-	r.POST("/photonwebhooks/room-created", controllers.RoomCreatedWebhook)
-	r.POST("/photonwebhooks/player-joined", controllers.PlayerJoinedWebhook)
+	r.POST("/photonwebhooks/roomcreated", controllers.RoomCreatedWebhook)
+	r.POST("/photonwebhooks/playerjoined", controllers.PlayerJoinedWebhook)
 
 	err = r.Run()
 	if err != nil {
