@@ -8,10 +8,11 @@ import (
 	. "github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
-const PlayerIdTTl = 7200
-const PlayerStateIdTTl = 7200
+const PlayerIdTTl = 7200 * time.Second
+const PlayerStateIdTTl = 7200 * time.Second
 
 type PlayerRepository struct {
 	RepositoryEnv
@@ -19,8 +20,10 @@ type PlayerRepository struct {
 
 // Returns the game key for a given player for a specific game
 // The IP address must match the first IP address used to access this key
+// If the IP used to access to endpoint changes, an error is returned
+// This prevents other players from using a player's game key
 func (r PlayerRepository) GetPlayerGameKey(gameId GameId, playerId PlayerId, ipAddress string) (playerKey PlayerGameKey, err error) {
-	var keyName = fmt.Sprintf("playerGameKeys:%s:%s", gameId, playerId)
+	var keyName = GetPlayerGameKey( gameId, playerId)
 	newPlayerId := uuid.New()
 	newKey := PlayerGameKey{Key: newPlayerId.String(), OwnerIp: ipAddress}
 
@@ -42,7 +45,7 @@ func (r PlayerRepository) GetPlayerGameKey(gameId GameId, playerId PlayerId, ipA
 		return playerKey, err
 	}
 	var currentKey PlayerGameKey
-	err = json.Unmarshal([]byte(result), currentKey)
+	err = json.Unmarshal([]byte(result), &currentKey)
 	if err != nil {
 		return playerKey, err
 	}
@@ -57,14 +60,14 @@ func GetPlayerStateKey(gameId GameId, playerId PlayerId) string {
 	return fmt.Sprintf("playerState:%s:%s", gameId, playerId)
 }
 
-func GetPlayerGameKey(gameId GameId, playerId PlayerId, playerKey PlayerGameKey) string {
-	return fmt.Sprintf("playerGameKey:%s:%s:%s", gameId, playerId, playerKey)
+func GetPlayerGameKey(gameId GameId, playerId PlayerId) string {
+	return fmt.Sprintf("playerGameKey:%s:%s", gameId, playerId)
 }
 
 // Compare the given key to the one stored for the player
 // If there is no error and the 'valid' is false, this was an attempt to access player state with the wrong key
 func (env RepositoryEnv) CheckPlayerKey(gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (valid bool, err error) {
-	storedKey, err := env.RedisClient.Get(env.Context, GetPlayerGameKey(gameId, playerId, playerKey)).Result()
+	storedKey, err := env.RedisClient.Get(env.Context, GetPlayerGameKey(gameId, playerId)).Result()
 	if err != nil {
 		return false, err
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/models"
+	"github.com/SelaliAdobor/henchies-backend-go/src/util"
 	. "github.com/cenkalti/backoff"
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
@@ -40,9 +41,9 @@ func (r *GameRepository) InitGameState(gameId GameId, startingPlayerCount int, i
 	return UpdateGameStateTransaction(gameId, r.RedisClient, r.Context, func(gameState GameState) GameState {
 		return GameState{
 			ImposterCount: imposterCount,
-			MaxPlayers: startingPlayerCount,
-			Phase:   WaitingForPlayers,
-			Players: []PlayerId{},
+			MaxPlayers:    startingPlayerCount,
+			Phase:         WaitingForPlayers,
+			Players:       []PlayerId{},
 		}
 	})
 }
@@ -123,9 +124,20 @@ func (r *GameRepository) SubscribeGameState(gameId GameId, playerId PlayerId, pl
 
 	go func() {
 		defer close(send)
+		var gameState GameState
+
+		err := util.GetRedisJson(r.Context, r.RedisClient, GetGameStateKey(gameId), &gameState)
+		if err != nil {
+			logrus.Error("failed to unmarshal Game State from key", err)
+			return
+		}
+		send <- gameState
 		for {
-			message := <-listen
-			var gameState GameState
+			message, ok := <-listen
+			if !ok {
+				return
+			}
+
 			err := json.Unmarshal([]byte(message.Payload), &gameState)
 			if err != nil {
 				logrus.Error("failed to unmarshal Game State from pubsub", err)

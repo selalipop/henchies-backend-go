@@ -10,7 +10,7 @@ import (
 func (env *Controllers) GetPlayerGameKey(c *gin.Context) {
 	var request schema.GetPlayerGameKeyRequest
 
-	if err := c.ShouldBindJSON(&request); err != nil {
+	if err := c.ShouldBindQuery(&request); err != nil {
 		WriteInvalidRequestResponse(c, err)
 		return
 	}
