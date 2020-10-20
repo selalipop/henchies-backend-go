@@ -7,4 +7,3 @@ type InvalidPlayerKeyError string
 func (e InvalidPlayerKeyError) Error() string {
 	return string(e)
 }
-

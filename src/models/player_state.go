@@ -6,7 +6,6 @@ type PlayerGameKey struct {
 }
 
 type PlayerState struct {
-	GlobalUserId PlayerId      `json:"playerId"`
 	GameKey      PlayerGameKey `json:"gameKey"`
 	CurrentGame  GameId        `json:"currentGame"`
 	IsImposter   bool          `json:"isImposter"`

@@ -11,9 +11,10 @@ require (
 	github.com/go-openapi/swag v0.19.9 // indirect
 	github.com/go-redis/redis/v8 v8.3.0
 	github.com/google/uuid v1.1.2
-	github.com/gorilla/websocket v1.4.2
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/mitchellh/mapstructure v1.3.3
 	github.com/sirupsen/logrus v1.7.0
 	github.com/swaggo/files v0.0.0-20190704085106-630677cd5c14 // indirect
 	github.com/swaggo/gin-swagger v1.2.0 // indirect

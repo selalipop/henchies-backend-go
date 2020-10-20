@@ -16,12 +16,12 @@ type PhotonExtendedArgs struct {
 	NickName        string   `json:"NickName"`
 	PhotonArgs
 }
+
 type  CustomRoomProperties struct{
 	ImposterCount  int          `json:"ImposterCount"`
 }
-
-type RoomCreatedRequest struct {
-	MaxPlayers         int                  `json:"ActorNr"`
+type CreateOptions struct {
+	MaxPlayers         int                  `json:"MaxPlayers"`
 	LobbyId            string               `json:"LobbyId"`
 	LobbyType          int                  `json:"LobbyType"`
 	CustomProperties   CustomRoomProperties `json:"CustomProperties"`
@@ -30,9 +30,20 @@ type RoomCreatedRequest struct {
 	CheckUserOnJoin    bool                 `json:"CheckUserOnJoin"`
 	DeleteCacheOnLeave bool                 `json:"DeleteCacheOnLeave"`
 	SuppressRoomEvents bool                 `json:"SuppressRoomEvents"`
+
+}
+
+//Requests
+
+type RoomCreatedRequest struct {
+	CreateOptions         CreateOptions                  `json:"CreateOptions"`
 	PhotonExtendedArgs
 }
 
 type PlayerJoinedRequest struct {
+	PhotonExtendedArgs
+}
+
+type PlayerLeftRequest struct {
 	PhotonExtendedArgs
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/controllers"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/repository"
 
@@ -20,7 +19,6 @@ func main() {
 
 	args := GetArguments()
 
-	redisContext := context.Background()
 	redisOptions, err := redis.ParseURL(args.RedisConnectUrl)
 	if err != nil {
 		logrus.Error("failed to parse Redis Connection Url ", err)
@@ -31,9 +29,8 @@ func main() {
 
 	redisClient := redis.NewClient(redisOptions)
 
-	repositoryEnv := RepositoryEnv{
+	repositoryEnv := Repository{
 		RedisClient: redisClient,
-		Context:     redisContext,
 	}
 
 	playerRepository := PlayerRepository{repositoryEnv}

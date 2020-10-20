@@ -1,21 +1,20 @@
 package repository
 
 import (
-	"context"
+	. "context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	. "github.com/SelaliAdobor/henchies-backend-go/src/models"
-	"github.com/SelaliAdobor/henchies-backend-go/src/util"
+	"github.com/SelaliAdobor/henchies-backend-go/src/redisUtil"
 	. "github.com/cenkalti/backoff"
-	"github.com/go-redis/redis/v8"
-	"github.com/sirupsen/logrus"
+	. "github.com/go-redis/redis/v8"
 	"time"
 )
 
 type GameRepository struct {
 	PlayerRepo *PlayerRepository
-	RepositoryEnv
+	Repository
 }
 
 func GetGameStatePubSubKey(gameId GameId) string {
@@ -28,9 +27,9 @@ func GetGameStateKey(gameId GameId) string {
 var GameStateTTL = 5 * time.Hour
 var MaxElapsedTimeGameStateUpdate = 5 * time.Minute
 
-func (r *GameRepository) InitGameState(gameId GameId, startingPlayerCount int, imposterCount int) error {
+func (r *GameRepository) InitGameState(ctx Context, gameId GameId, startingPlayerCount int, imposterCount int) error {
 	exists, err :=
-		r.RedisClient.Exists(r.Context, GetGameStateKey(gameId)).Result()
+		r.RedisClient.Exists(ctx, GetGameStateKey(gameId)).Result()
 	if err != nil {
 		return err
 	}
@@ -38,7 +37,7 @@ func (r *GameRepository) InitGameState(gameId GameId, startingPlayerCount int, i
 		return errors.New("game already initialized")
 	}
 
-	return UpdateGameStateTransaction(gameId, r.RedisClient, r.Context, func(gameState GameState) GameState {
+	return UpdateGameStateTransaction(ctx, r.RedisClient, gameId, func(gameState GameState) GameState {
 		return GameState{
 			ImposterCount: imposterCount,
 			MaxPlayers:    startingPlayerCount,
@@ -47,9 +46,11 @@ func (r *GameRepository) InitGameState(gameId GameId, startingPlayerCount int, i
 		}
 	})
 }
-func (r *GameRepository) AddPlayerToGame(gameId GameId, playerId PlayerId) error {
+func (r *GameRepository) AddPlayerToGame(ctx Context,
+	gameId GameId, playerId PlayerId) error {
+
 	exists, err :=
-		r.RedisClient.Exists(r.Context, GetGameStateKey(gameId)).Result()
+		r.RedisClient.Exists(ctx, GetGameStateKey(gameId)).Result()
 
 	if err != nil {
 		return err
@@ -58,7 +59,7 @@ func (r *GameRepository) AddPlayerToGame(gameId GameId, playerId PlayerId) error
 		return errors.New("game already initialized")
 	}
 
-	err = UpdateGameStateTransaction(gameId, r.RedisClient, r.Context, func(gameState GameState) GameState {
+	err = UpdateGameStateTransaction(ctx, r.RedisClient, gameId, func(gameState GameState) GameState {
 		gameState.Players = append(gameState.Players, playerId)
 		return gameState
 	})
@@ -66,14 +67,16 @@ func (r *GameRepository) AddPlayerToGame(gameId GameId, playerId PlayerId) error
 		return err
 	}
 
-	return r.PlayerRepo.UpdatePlayerStateUnchecked(gameId, playerId, func(state *PlayerState) {
+	return r.PlayerRepo.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
 		state.CurrentGame = gameId
+		return state
 	})
 }
-func (r *GameRepository) UpdateGameState(gameId GameId, update func(gameState GameState) GameState) error {
+func (r *GameRepository) UpdateGameState(ctx Context,
+	gameId GameId, update func(gameState GameState) GameState) error {
 
 	operation := func() error {
-		return UpdateGameStateTransaction(gameId, r.RedisClient, r.Context, update)
+		return UpdateGameStateTransaction(ctx, r.RedisClient, gameId, update)
 	}
 
 	backoff := NewExponentialBackOff()
@@ -81,36 +84,29 @@ func (r *GameRepository) UpdateGameState(gameId GameId, update func(gameState Ga
 	return Retry(operation, backoff)
 }
 
-func UpdateGameStateTransaction(gameId GameId, client *redis.Client, context context.Context, update func(gameState GameState) GameState) error {
+func UpdateGameStateTransaction(ctx Context,
+	client *Client, gameId GameId, update func(gameState GameState) GameState) error {
+
 	stateKey := GetGameStateKey(gameId)
 	publishKey := GetGameStatePubSubKey(gameId)
 
-	return client.Watch(context, func(tx *redis.Tx) error {
-		gameStateJson, err := tx.Get(context, stateKey).Result()
-		if err != nil && err != redis.Nil {
-			return err
-		}
-		var currentState GameState
-		if err != redis.Nil {
-			err = json.Unmarshal([]byte(gameStateJson), &currentState)
-			if err != nil {
-				return err
-			}
-		}
-		newState := update(currentState)
-		newStateSerialized, err := json.Marshal(newState)
-		_, err = tx.TxPipelined(context, func(pipe redis.Pipeliner) error {
-			pipe.Set(context, stateKey, newStateSerialized, GameStateTTL)
-			pipe.Publish(context, publishKey, newStateSerialized)
-			return nil
+	return redisUtil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, GameStateTTL, 0,
+		func(data []byte) (interface{}, error) {
+			var gameState GameState
+			err := json.Unmarshal(data, &gameState)
+			return gameState, err
+		},
+		func() interface{} {
+			return GameState{}
+		}, func(value interface{}) interface{} {
+			return update(value.(GameState))
 		})
-		return err
-	}, stateKey)
 }
 
-func (r *GameRepository) SubscribeGameState(gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (channel chan GameState, err error) {
+func (r *GameRepository) SubscribeGameState(ctx Context,
+	gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (channel chan GameState, err error) {
 
-	valid, err := r.CheckPlayerKey(gameId, playerId, playerKey)
+	valid, err := r.CheckPlayerKey(ctx, gameId, playerId, playerKey)
 	if err != nil {
 		return nil, err
 	}
@@ -118,34 +114,19 @@ func (r *GameRepository) SubscribeGameState(gameId GameId, playerId PlayerId, pl
 		return nil, InvalidPlayerKeyErr
 	}
 
-	listen := r.RedisClient.Subscribe(r.Context, GetGameStatePubSubKey(gameId)).Channel()
+	var gameState GameState
+	subscription, err := redisUtil.SubscribeJson(ctx, r.RedisClient, GetGameStateKey(gameId), GetGameStatePubSubKey(gameId), &gameState)
 
-	send := make(chan GameState)
-
+	channel = make(chan GameState)
 	go func() {
-		defer close(send)
-		var gameState GameState
-
-		err := util.GetRedisJson(r.Context, r.RedisClient, GetGameStateKey(gameId), &gameState)
-		if err != nil {
-			logrus.Error("failed to unmarshal Game State from key", err)
-			return
-		}
-		send <- gameState
+		defer close(channel)
 		for {
-			message, ok := <-listen
+			latest, ok := <-subscription
 			if !ok {
 				return
 			}
-
-			err := json.Unmarshal([]byte(message.Payload), &gameState)
-			if err != nil {
-				logrus.Error("failed to unmarshal Game State from pubsub", err)
-				break
-			}
-			send <- gameState
+			channel <- *latest.(*GameState)
 		}
 	}()
-
-	return send, nil
+	return channel, nil
 }

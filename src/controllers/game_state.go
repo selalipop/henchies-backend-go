@@ -15,7 +15,7 @@ func (env *Controllers) GetGameState(c *gin.Context) {
 		WriteInvalidRequestResponse(c, err)
 		return
 	}
-	stateChan, err := env.GameRepository.SubscribeGameState(request.GameId, request.PlayerId, models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: c.ClientIP()})
+	stateChan, err := env.GameRepository.SubscribeGameState(c, request.GameId, request.PlayerId, models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: c.ClientIP()})
 
 	if err != nil {
 		logrus.Error("failed to subscribe to game state", err)

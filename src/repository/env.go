@@ -1,9 +1,7 @@
 package repository
 
 import "github.com/go-redis/redis/v8"
-import "context"
 
-type RepositoryEnv struct {
+type Repository struct {
 	RedisClient *redis.Client
-	Context     context.Context
 }
