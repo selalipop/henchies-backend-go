@@ -5,6 +5,5 @@ import (
 )
 
 type Controllers struct {
-	 PlayerRepository repository.PlayerRepository
-	 GameRepository repository.GameRepository
+	 Repository repository.Repository
 }

@@ -17,10 +17,9 @@ func GetRedisJson(ctx Context, client *Client, key string, marshalTo interface{}
 
 	return json.Unmarshal([]byte(value), marshalTo)
 }
+
 func SubscribeJson(ctx Context,client *Client,
 	getKey string, pubSubKey string, marhsalTo interface{}) (channel chan interface{}, err error) {
-
-
 
 	listen := client.Subscribe(ctx, pubSubKey).Channel()
 
@@ -28,13 +27,15 @@ func SubscribeJson(ctx Context,client *Client,
 
 	go func() {
 		defer close(send)
-
-		err := GetRedisJson(ctx, client, getKey, marhsalTo)
-		if err != nil {
-			logrus.Error("failed to unmarshal Game State from key", err)
-			return
+		if getKey != "" {
+			err := GetRedisJson(ctx, client, getKey, marhsalTo)
+			if err != nil {
+				logrus.Error("failed to unmarshal Game State from key", err)
+				return
+			}
+			send <- marhsalTo
 		}
-		send <- marhsalTo
+
 		for {
 			message, ok := <-listen
 			if !ok {

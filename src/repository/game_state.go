@@ -12,10 +12,6 @@ import (
 	"time"
 )
 
-type GameRepository struct {
-	PlayerRepo *PlayerRepository
-	Repository
-}
 
 func GetGameStatePubSubKey(gameId GameId) string {
 	return fmt.Sprintf("playerGamePubSubKey:%s", gameId)
@@ -27,7 +23,7 @@ func GetGameStateKey(gameId GameId) string {
 var GameStateTTL = 5 * time.Hour
 var MaxElapsedTimeGameStateUpdate = 5 * time.Minute
 
-func (r *GameRepository) InitGameState(ctx Context, gameId GameId, startingPlayerCount int, imposterCount int) error {
+func (r *Repository) InitGameState(ctx Context, gameId GameId, startingPlayerCount int, imposterCount int) error {
 	exists, err :=
 		r.RedisClient.Exists(ctx, GetGameStateKey(gameId)).Result()
 	if err != nil {
@@ -46,7 +42,7 @@ func (r *GameRepository) InitGameState(ctx Context, gameId GameId, startingPlaye
 		}
 	})
 }
-func (r *GameRepository) AddPlayerToGame(ctx Context,
+func (r *Repository) AddPlayerToGame(ctx Context,
 	gameId GameId, playerId PlayerId) error {
 
 	exists, err :=
@@ -67,12 +63,12 @@ func (r *GameRepository) AddPlayerToGame(ctx Context,
 		return err
 	}
 
-	return r.PlayerRepo.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
+	return r.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
 		state.CurrentGame = gameId
 		return state
 	})
 }
-func (r *GameRepository) UpdateGameState(ctx Context,
+func (r *Repository) UpdateGameState(ctx Context,
 	gameId GameId, update func(gameState GameState) GameState) error {
 
 	operation := func() error {
@@ -103,7 +99,7 @@ func UpdateGameStateTransaction(ctx Context,
 		})
 }
 
-func (r *GameRepository) SubscribeGameState(ctx Context,
+func (r *Repository) SubscribeGameState(ctx Context,
 	gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (channel chan GameState, err error) {
 
 	valid, err := r.CheckPlayerKey(ctx, gameId, playerId, playerKey)

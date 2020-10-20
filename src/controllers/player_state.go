@@ -9,43 +9,43 @@ import (
 	"net/http"
 )
 
-func (env *Controllers) GetPlayerGameKey(c *gin.Context) {
+func (c *Controllers) GetPlayerGameKey(ctx *gin.Context) {
 	var request schema.GetPlayerGameKeyRequest
 
-	if err := c.ShouldBindQuery(&request); err != nil {
-		WriteInvalidRequestResponse(c, err)
+	if err := ctx.ShouldBindQuery(&request); err != nil {
+		WriteInvalidRequestResponse(ctx, err)
 		return
 	}
-	id, err := env.PlayerRepository.GetPlayerGameKey(c, request.GameId, request.PlayerId, c.ClientIP())
+	id, err := c.Repository.GetPlayerGameKey(ctx, request.GameId, request.PlayerId, ctx.ClientIP())
 	if err != nil {
-		WriteInternalErrorResponse(c, err)
+		WriteInternalErrorResponse(ctx, err)
 	}
-	c.JSON(http.StatusOK, gin.H{"id": id})
+	ctx.JSON(http.StatusOK, gin.H{"id": id})
 }
 
-func (env *Controllers) GetPlayerState(c *gin.Context) {
+func (c *Controllers) GetPlayerState(ctx *gin.Context) {
 	var request schema.GetPlayerStateRequest
 
-	if err := c.ShouldBindQuery(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := ctx.ShouldBindQuery(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	playerKey := models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: c.ClientIP()}
-	stateChan, err := env.PlayerRepository.SubscribePlayerState(c, request.GameId, request.PlayerId, playerKey)
+	playerKey := models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: ctx.ClientIP()}
+	stateChan, err := c.Repository.SubscribePlayerState(ctx, request.GameId, request.PlayerId, playerKey)
 
 	if err != nil {
 		if err == repository.InvalidPlayerKeyErr {
-			WriteAuthenticationErrorResponse(c, err)
+			WriteAuthenticationErrorResponse(ctx, err)
 		} else {
-			WriteInternalErrorResponse(c, err)
+			WriteInternalErrorResponse(ctx, err)
 		}
 		return
 	}
 
-	c.Stream(func(w io.Writer) bool {
+	ctx.Stream(func(w io.Writer) bool {
 		if state, ok := <-stateChan; ok {
-			c.SSEvent("player_state_changed", state)
+			ctx.SSEvent("player_state_changed", state)
 			return true
 		}
 		return false

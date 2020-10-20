@@ -13,23 +13,23 @@ import (
 
 const WaitForLeavingPlayersDuration = 15 * time.Second
 
-func (env *Controllers) PlayerJoinedWebhook(c *gin.Context) {
+func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 	var request schema.PlayerJoinedRequest
 
-	if err := c.ShouldBindJSON(&request); err != nil {
-		WriteInvalidRequestResponse(c, err)
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		WriteInvalidRequestResponse(ctx, err)
 		return
 	}
-	err := env.PlayerRepository.UpdatePlayerStateUnchecked(c,request.GameId, request.UserId, func(state PlayerState) PlayerState {
+	err := c.Repository.UpdatePlayerStateUnchecked(ctx,request.GameId, request.UserId, func(state PlayerState) PlayerState {
 		state.CurrentGame = request.GameId
 		return state
 	})
 
 	if err != nil {
-		WriteInternalErrorResponse(c, err)
+		WriteInternalErrorResponse(ctx, err)
 		return
 	}
-	err = env.GameRepository.UpdateGameState(c, request.GameId, func(gameState GameState) GameState {
+	err = c.Repository.UpdateGameState(ctx, request.GameId, func(gameState GameState) GameState {
 		if gameState.Players.Contains(request.UserId) {
 			return gameState
 		}
@@ -38,20 +38,20 @@ func (env *Controllers) PlayerJoinedWebhook(c *gin.Context) {
 
 		if len(gameState.Players) == gameState.MaxPlayers {
 			gameState.Phase = Starting
-			go startGame(c, request.GameId, env)
+			go startGame(ctx, request.GameId, c)
 		}
 		return gameState
 	})
 
 	if err != nil {
-		WriteInternalErrorResponse(c, err)
+		WriteInternalErrorResponse(ctx, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func startGame(ctx context.Context, gameId GameId, env *Controllers) {
-	err := env.GameRepository.UpdateGameState(ctx, gameId, func(gameState GameState) GameState {
+	err := env.Repository.UpdateGameState(ctx, gameId, func(gameState GameState) GameState {
 		if gameState.Phase != Starting {
 			return gameState
 		}
@@ -72,7 +72,7 @@ func startGame(ctx context.Context, gameId GameId, env *Controllers) {
 		remainingColors := GetSelectableColors()
 
 		for index, playerId := range gameState.Players {
-			err := env.PlayerRepository.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
+			err := env.Repository.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
 				state.IsImposter = index < gameState.ImposterCount
 				state.Color = remainingColors[0]
 				return state

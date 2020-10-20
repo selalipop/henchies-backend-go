@@ -7,11 +7,11 @@ import (
 	"net/http"
 )
 
-func (env *Controllers) RoomCreatedWebhook(c *gin.Context) {
+func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 	var request schema.RoomCreatedRequest
 
-	if err := c.ShouldBindJSON(&request); err != nil {
-		WriteInvalidRequestResponse(c, err)
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		WriteInvalidRequestResponse(ctx, err)
 		return
 	}
 	var imposterCount = request.CreateOptions.CustomProperties.ImposterCount
@@ -20,9 +20,9 @@ func (env *Controllers) RoomCreatedWebhook(c *gin.Context) {
 		imposterCount = int(math.Ceil( 0.2 * float64(request.CreateOptions.MaxPlayers)))
 	}
 
-	err := env.GameRepository.InitGameState(c, request.GameId, request.CreateOptions.MaxPlayers, imposterCount)
+	err := c.Repository.InitGameState(ctx, request.GameId, request.CreateOptions.MaxPlayers, imposterCount)
 	if err != nil {
-		WriteInternalErrorResponse(c, err)
+		WriteInternalErrorResponse(ctx, err)
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, gin.H{"success": true})
 }

@@ -7,15 +7,15 @@ import (
 	"net/http"
 )
 
-func (env *Controllers) PlayerLeftWebhook(c *gin.Context) {
+func (c *Controllers) PlayerLeftWebhook(ctx *gin.Context) {
 	var request schema.PlayerLeftRequest
 
-	if err := c.ShouldBindJSON(&request); err != nil {
-		WriteInvalidRequestResponse(c, err)
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		WriteInvalidRequestResponse(ctx, err)
 		return
 	}
 
-	err := env.PlayerRepository.UpdatePlayerStateUnchecked(c, request.GameId, request.UserId, func(state PlayerState) PlayerState {
+	err := c.Repository.UpdatePlayerStateUnchecked(ctx, request.GameId, request.UserId, func(state PlayerState) PlayerState {
 		if state.CurrentGame == request.GameId {
 			state = PlayerState{}
 		}
@@ -23,10 +23,10 @@ func (env *Controllers) PlayerLeftWebhook(c *gin.Context) {
 	})
 
 	if err != nil {
-		WriteInternalErrorResponse(c, err)
+		WriteInternalErrorResponse(ctx, err)
 		return
 	}
-	err = env.GameRepository.UpdateGameState(c, request.GameId, func(gameState GameState) GameState {
+	err = c.Repository.UpdateGameState(ctx, request.GameId, func(gameState GameState) GameState {
 		if !gameState.Players.Contains(request.UserId) {
 			return gameState
 		}
@@ -38,8 +38,8 @@ func (env *Controllers) PlayerLeftWebhook(c *gin.Context) {
 	})
 
 	if err != nil {
-		WriteInternalErrorResponse(c, err)
+		WriteInternalErrorResponse(ctx, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, gin.H{"success": true})
 }
