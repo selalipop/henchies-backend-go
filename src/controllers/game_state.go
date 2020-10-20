@@ -8,15 +8,16 @@ import (
 	"io"
 )
 
+//  GetGameState returns a SSE stream of Game State Changes
 func (c *Controllers) GetGameState(ctx *gin.Context) {
 	var request schema.GetGameStateRequest
 	if err := ctx.ShouldBindQuery(&request); err != nil {
 		logrus.Error("failed to parse game state request ", err)
-		WriteInvalidRequestResponse(ctx, err)
+		writeInvalidRequestResponse(ctx, err)
 		return
 	}
 
-	stateChan, err := c.Repository.SubscribeGameState(ctx, request.GameId, request.PlayerId, models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: ctx.ClientIP()})
+	stateChan, err := c.Repository.SubscribeGameState(ctx, request.GameID, request.PlayerID, models.PlayerGameKey{Key: request.PlayerKey, OwnerIP: ctx.ClientIP()})
 
 	if err != nil {
 		logrus.Error("failed to subscribe to game state", err)

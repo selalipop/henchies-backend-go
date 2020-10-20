@@ -14,12 +14,13 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mailru/easyjson v0.7.6 // indirect
-	github.com/mitchellh/mapstructure v1.3.3
+	github.com/mitchellh/mapstructure v1.3.3 // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/swaggo/files v0.0.0-20190704085106-630677cd5c14 // indirect
 	github.com/swaggo/gin-swagger v1.2.0 // indirect
 	github.com/swaggo/swag v1.6.7 // indirect
 	github.com/toorop/gin-logrus v0.0.0-20200831135515-d2ee50d38dae
+	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20201010224723-4f7140c49acb // indirect
-	golang.org/x/tools v0.0.0-20201013015553-ec925d8b1dc6 // indirect
+	golang.org/x/tools v0.0.0-20201020161133-226fd2f889ca // indirect
 )

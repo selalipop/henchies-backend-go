@@ -1,3 +1,4 @@
 package models
 
-type GameId string
+// GameID represents a game's ID, should match Photon RoomName
+type GameID string

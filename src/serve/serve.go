@@ -1,8 +1,8 @@
 package main
 
 import (
-	. "github.com/SelaliAdobor/henchies-backend-go/src/controllers"
-	. "github.com/SelaliAdobor/henchies-backend-go/src/repository"
+	"github.com/SelaliAdobor/henchies-backend-go/src/controllers"
+	"github.com/SelaliAdobor/henchies-backend-go/src/repository"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -12,59 +12,58 @@ import (
 )
 
 type Arguments struct {
-	RedisConnectUrl string `required:"true"`
+	RedisConnectURL string `required:"true"`
 }
 
-func main() {
-
+func main(){
 	args := GetArguments()
 
-	redisOptions, err := redis.ParseURL(args.RedisConnectUrl)
+	redisOptions, err := redis.ParseURL(args.RedisConnectURL)
 	if err != nil {
 		logrus.Error("failed to parse Redis Connection Url ", err)
 	}
 
-	//Required due to DO connection string format
+	// Required due to DO connection string format
 	redisOptions.Username = ""
 
 	redisClient := redis.NewClient(redisOptions)
 
-	repositoryEnv := Repository{
-		RedisClient: redisClient,
+	c := controllers.Controllers{
+		Repository: repository.Repository{
+			RedisClient: redisClient,
+		},
 	}
 
-	playerRepository := PlayerRepository{repositoryEnv}
-	gameRepository := GameRepository{&playerRepository, repositoryEnv}
-
-	controllers := Controllers{
-		PlayerRepository: playerRepository,
-		GameRepository:   gameRepository,
-	}
-
-	r := gin.New()
+	g := gin.New()
 
 	log := logrus.New()
-	r.Use(ginlogrus.Logger(log), gin.Recovery())
+	g.Use(ginlogrus.Logger(log), gin.Recovery())
 
-	r.GET("/", controllers.GetInfo)
+	SetupRoutes(g, c)
 
-	r.GET("/player/state", controllers.GetPlayerState)
-	r.GET("/player/key", controllers.GetPlayerGameKey)
-
-	r.GET("/game/state", controllers.GetGameState)
-
-	r.POST("/photonwebhooks/roomcreated", controllers.RoomCreatedWebhook)
-	r.POST("/photonwebhooks/playerjoined", controllers.PlayerJoinedWebhook)
-
-	err = r.Run()
+	err = g.Run()
 	if err != nil {
 		logrus.Fatal(err)
 	}
 }
+//goland:noinspection ALL
+func SetupRoutes(g *gin.Engine, c controllers.Controllers) {
+	g.GET("/", c.GetInfo)
+
+	g.GET("/player/state", c.GetPlayerState)
+	g.GET("/player/key", c.GetPlayerGameKey)
+
+	g.GET("/game/state", c.GetGameState)
+
+	g.POST("/photonwebhooks/roomcreated", c.RoomCreatedWebhook)
+	g.POST("/photonwebhooks/playerjoined", c.PlayerJoinedWebhook)
+	g.POST("/photonwebhooks/playerleft", c.PlayerLeftWebhook)
+}
 
 func GetArguments() Arguments {
 	var args Arguments
-	err := envconfig.Process("henchies", &args)
+	const argumentsPrefix = "henchies"
+	err := envconfig.Process(argumentsPrefix, &args)
 	if err != nil {
 		logrus.Fatal(err.Error())
 	}

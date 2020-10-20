@@ -8,7 +8,7 @@ import (
 // Contains returns true if the element exists in the slice.
 //
 // When using slices of pointers it will only compare by address, not value.
-func (ss PlayerIds) Contains(lookingFor PlayerId) bool {
+func (ss PlayerIDs) Contains(lookingFor PlayerID) bool {
 	for _, s := range ss {
 		if lookingFor == s {
 			return true
@@ -22,7 +22,7 @@ func (ss PlayerIds) Contains(lookingFor PlayerId) bool {
 // true from the condition. The returned slice may contain zero elements (nil).
 //
 // FilterNot works in the opposite way of Filter.
-func (ss PlayerIds) Filter(condition func(PlayerId) bool) (ss2 PlayerIds) {
+func (ss PlayerIDs) Filter(condition func(PlayerID) bool) (ss2 PlayerIDs) {
 	for _, s := range ss {
 		if condition(s) {
 			ss2 = append(ss2, s)
@@ -32,7 +32,7 @@ func (ss PlayerIds) Filter(condition func(PlayerId) bool) (ss2 PlayerIds) {
 }
 
 // Shuffle returns shuffled slice by your rand.Source
-func (ss PlayerIds) Shuffle(source rand.Source) PlayerIds {
+func (ss PlayerIDs) Shuffle(source rand.Source) PlayerIDs {
 	n := len(ss)
 
 	// Avoid the extra allocation.
@@ -43,7 +43,7 @@ func (ss PlayerIds) Shuffle(source rand.Source) PlayerIds {
 	// go 1.10+ provides rnd.Shuffle. However, to support older versions we copy
 	// the algorithm directly from the go source: src/math/rand/rand.go below,
 	// with some adjustments:
-	shuffled := make([]PlayerId, n)
+	shuffled := make([]PlayerID, n)
 	copy(shuffled, ss)
 
 	rnd := rand.New(source)

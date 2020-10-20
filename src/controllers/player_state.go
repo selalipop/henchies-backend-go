@@ -5,24 +5,30 @@ import (
 	"github.com/SelaliAdobor/henchies-backend-go/src/repository"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 )
 
+// GetPlayerGameKey returns a game specific key for the player
+// All subsequent calls from the player must be from the original IP,
+// so this value should be stored per-game on the client
 func (c *Controllers) GetPlayerGameKey(ctx *gin.Context) {
 	var request schema.GetPlayerGameKeyRequest
 
 	if err := ctx.ShouldBindQuery(&request); err != nil {
-		WriteInvalidRequestResponse(ctx, err)
+		writeInvalidRequestResponse(ctx, err)
 		return
 	}
-	id, err := c.Repository.GetPlayerGameKey(ctx, request.GameId, request.PlayerId, ctx.ClientIP())
+	id, err := c.Repository.GetPlayerGameKey(ctx, request.GameID, request.PlayerID, ctx.ClientIP())
 	if err != nil {
-		WriteInternalErrorResponse(ctx, err)
+		logrus.Errorf("failed to get player game key: %v", err)
+		writeInternalErrorResponse(ctx, err)
 	}
 	ctx.JSON(http.StatusOK, gin.H{"id": id})
 }
 
+// GetPlayerState returns a SSE stream of Player State Changes
 func (c *Controllers) GetPlayerState(ctx *gin.Context) {
 	var request schema.GetPlayerStateRequest
 
@@ -31,14 +37,14 @@ func (c *Controllers) GetPlayerState(ctx *gin.Context) {
 		return
 	}
 
-	playerKey := models.PlayerGameKey{Key: request.PlayerKey, OwnerIp: ctx.ClientIP()}
-	stateChan, err := c.Repository.SubscribePlayerState(ctx, request.GameId, request.PlayerId, playerKey)
+	playerKey := models.PlayerGameKey{Key: request.PlayerKey, OwnerIP: ctx.ClientIP()}
+	stateChan, err := c.Repository.SubscribePlayerState(ctx, request.GameID, request.PlayerID, playerKey)
 
 	if err != nil {
-		if err == repository.InvalidPlayerKeyErr {
-			WriteAuthenticationErrorResponse(ctx, err)
+		if err == repository.UnauthorizedPlayer {
+			writeAuthenticationErrorResponse(ctx, err)
 		} else {
-			WriteInternalErrorResponse(ctx, err)
+			writeInternalErrorResponse(ctx, err)
 		}
 		return
 	}

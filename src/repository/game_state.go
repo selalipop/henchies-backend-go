@@ -1,31 +1,24 @@
 package repository
 
 import (
-	. "context"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	. "github.com/SelaliAdobor/henchies-backend-go/src/models"
-	"github.com/SelaliAdobor/henchies-backend-go/src/redisUtil"
-	. "github.com/cenkalti/backoff"
-	. "github.com/go-redis/redis/v8"
+	"github.com/SelaliAdobor/henchies-backend-go/src/models"
+	"github.com/SelaliAdobor/henchies-backend-go/src/redisutil"
+	"github.com/cenkalti/backoff"
+	"github.com/go-redis/redis/v8"
 	"time"
 )
 
+var gameStateRedisTTL = 5 * time.Hour
+var maxElapsedGameUpdateTime = 5 * time.Minute
 
-func GetGameStatePubSubKey(gameId GameId) string {
-	return fmt.Sprintf("playerGamePubSubKey:%s", gameId)
-}
-func GetGameStateKey(gameId GameId) string {
-	return fmt.Sprintf("playerGameKey:%s", gameId)
-}
-
-var GameStateTTL = 5 * time.Hour
-var MaxElapsedTimeGameStateUpdate = 5 * time.Minute
-
-func (r *Repository) InitGameState(ctx Context, gameId GameId, startingPlayerCount int, imposterCount int) error {
+// InitGameState initializes game state with given parameters
+// Returns an error if the game has already been initialized
+func (r *Repository) InitGameState(ctx context.Context, gameID models.GameID, startingPlayerCount int, imposterCount int) error {
 	exists, err :=
-		r.RedisClient.Exists(ctx, GetGameStateKey(gameId)).Result()
+		r.RedisClient.Exists(ctx, redisKeyGameState(gameID)).Result()
 	if err != nil {
 		return err
 	}
@@ -33,20 +26,21 @@ func (r *Repository) InitGameState(ctx Context, gameId GameId, startingPlayerCou
 		return errors.New("game already initialized")
 	}
 
-	return UpdateGameStateTransaction(ctx, r.RedisClient, gameId, func(gameState GameState) GameState {
-		return GameState{
+	return internalUpdateGameStateTx(ctx, r.RedisClient, gameID, func(gameState models.GameState) models.GameState {
+		return models.GameState{
 			ImposterCount: imposterCount,
 			MaxPlayers:    startingPlayerCount,
-			Phase:         WaitingForPlayers,
-			Players:       []PlayerId{},
+			Phase:         models.WaitingForPlayers,
+			Players:       []models.PlayerID{},
 		}
 	})
 }
-func (r *Repository) AddPlayerToGame(ctx Context,
-	gameId GameId, playerId PlayerId) error {
 
+// AddPlayerToGame adds a player to an existing game
+// Will update game state and player state to reflect current game
+func (r *Repository) AddPlayerToGame(ctx context.Context, gameID models.GameID, playerID models.PlayerID) error {
 	exists, err :=
-		r.RedisClient.Exists(ctx, GetGameStateKey(gameId)).Result()
+		r.RedisClient.Exists(ctx, redisKeyGameState(gameID)).Result()
 
 	if err != nil {
 		return err
@@ -55,65 +49,53 @@ func (r *Repository) AddPlayerToGame(ctx Context,
 		return errors.New("game already initialized")
 	}
 
-	err = UpdateGameStateTransaction(ctx, r.RedisClient, gameId, func(gameState GameState) GameState {
-		gameState.Players = append(gameState.Players, playerId)
+	err = internalUpdateGameStateTx(ctx, r.RedisClient, gameID, func(gameState models.GameState) models.GameState {
+		gameState.Players = append(gameState.Players, playerID)
 		return gameState
 	})
 	if err != nil {
 		return err
 	}
 
-	return r.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
-		state.CurrentGame = gameId
+	return r.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {
+		state.CurrentGame = gameID
 		return state
 	})
 }
-func (r *Repository) UpdateGameState(ctx Context,
-	gameId GameId, update func(gameState GameState) GameState) error {
 
+// UpdateGameState updates game state transactionally
+// Warning: update function may be called multiple times if the game state is modified while it is running
+// Update function should contain preconditions to verify current state before modifications
+func (r *Repository) UpdateGameState(ctx context.Context, gameID models.GameID, update func(gameState models.GameState) models.GameState) error {
 	operation := func() error {
-		return UpdateGameStateTransaction(ctx, r.RedisClient, gameId, update)
+		return internalUpdateGameStateTx(ctx, r.RedisClient, gameID, update)
 	}
 
-	backoff := NewExponentialBackOff()
-	backoff.MaxElapsedTime = MaxElapsedTimeGameStateUpdate
-	return Retry(operation, backoff)
+	txBackoff := backoff.NewExponentialBackOff()
+	txBackoff.MaxElapsedTime = maxElapsedGameUpdateTime
+	return backoff.Retry(operation, txBackoff)
 }
 
-func UpdateGameStateTransaction(ctx Context,
-	client *Client, gameId GameId, update func(gameState GameState) GameState) error {
-
-	stateKey := GetGameStateKey(gameId)
-	publishKey := GetGameStatePubSubKey(gameId)
-
-	return redisUtil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, GameStateTTL, 0,
-		func(data []byte) (interface{}, error) {
-			var gameState GameState
-			err := json.Unmarshal(data, &gameState)
-			return gameState, err
-		},
-		func() interface{} {
-			return GameState{}
-		}, func(value interface{}) interface{} {
-			return update(value.(GameState))
-		})
-}
-
-func (r *Repository) SubscribeGameState(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (channel chan GameState, err error) {
-
-	valid, err := r.CheckPlayerKey(ctx, gameId, playerId, playerKey)
+// SubscribeGameState returns a channel that passes on updates to Game State
+// Will immediately return current game state
+// Returns UnauthorizedPlayer error if the player key is not authorized to subscribe to this game
+func (r *Repository) SubscribeGameState(
+	ctx context.Context,
+	gameID models.GameID,
+	playerID models.PlayerID,
+	playerKey models.PlayerGameKey,
+) (channel chan models.GameState, err error) {
+	err = r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 	if err != nil {
 		return nil, err
 	}
-	if !valid {
-		return nil, InvalidPlayerKeyErr
+
+	var gameState models.GameState
+	subscription, err := redisutil.SubscribeJSON(ctx, r.RedisClient, redisKeyGameState(gameID), redisPublishKeyGameState(gameID), &gameState)
+	if err != nil {
+		return nil, err
 	}
-
-	var gameState GameState
-	subscription, err := redisUtil.SubscribeJson(ctx, r.RedisClient, GetGameStateKey(gameId), GetGameStatePubSubKey(gameId), &gameState)
-
-	channel = make(chan GameState)
+	channel = make(chan models.GameState)
 	go func() {
 		defer close(channel)
 		for {
@@ -121,8 +103,28 @@ func (r *Repository) SubscribeGameState(ctx Context,
 			if !ok {
 				return
 			}
-			channel <- *latest.(*GameState)
+			channel <- *latest.(*models.GameState)
 		}
 	}()
 	return channel, nil
+}
+
+func internalUpdateGameStateTx(ctx context.Context, client *redis.Client, gameID models.GameID, update func(gameState models.GameState) models.GameState) error {
+	stateKey := redisKeyGameState(gameID)
+	publishKey := redisPublishKeyGameState(gameID)
+
+	var gameState models.GameState
+
+	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, gameState,
+		func(value interface{}) interface{} {
+			return update(value.(models.GameState))
+		})
+}
+
+func redisPublishKeyGameState(gameID models.GameID) string {
+	return fmt.Sprintf("playerGamePubSubKey:%s", gameID)
+}
+
+func redisKeyGameState(gameID models.GameID) string {
+	return fmt.Sprintf("playerGameKey:%s", gameID)
 }

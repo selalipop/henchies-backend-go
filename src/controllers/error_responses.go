@@ -5,12 +5,12 @@ import (
 	"net/http"
 )
 
-func WriteInternalErrorResponse(c * gin.Context, err error)  {
+func writeInternalErrorResponse(c * gin.Context, err error)  {
 	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 }
-func WriteInvalidRequestResponse(c * gin.Context, err error)  {
+func writeInvalidRequestResponse(c * gin.Context, err error)  {
 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }
-func WriteAuthenticationErrorResponse(c * gin.Context, err error)  {
+func writeAuthenticationErrorResponse(c * gin.Context, err error)  {
 	c.JSON(http.StatusNetworkAuthenticationRequired, gin.H{"error": err.Error()})
 }

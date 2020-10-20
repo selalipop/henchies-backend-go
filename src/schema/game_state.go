@@ -1,10 +1,10 @@
 package schema
 
-import . "github.com/SelaliAdobor/henchies-backend-go/src/models"
+import "github.com/SelaliAdobor/henchies-backend-go/src/models"
 
-
+// GetGameStateRequest represents a request to retrieve a game's state
 type GetGameStateRequest struct {
-	PlayerId  PlayerId      `json:"playerId" binding:"required"`
-	GameId    GameId        `json:"gameId" binding:"required"`
-	PlayerKey string `json:"playerKey" binding:"required"`
+	PlayerID  models.PlayerID `json:"playerId" binding:"required"`
+	GameID    models.GameID   `json:"gameId" binding:"required"`
+	PlayerKey string          `json:"playerKey" binding:"required"`
 }

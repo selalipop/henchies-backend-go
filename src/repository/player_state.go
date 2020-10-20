@@ -1,85 +1,39 @@
 package repository
 
 import (
-	. "context"
+	"context"
 	"encoding/json"
-	"errors"
-	_ "errors"
 	"fmt"
-	. "github.com/SelaliAdobor/henchies-backend-go/src/models"
-	"github.com/SelaliAdobor/henchies-backend-go/src/redisUtil"
-	. "github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
+	"github.com/SelaliAdobor/henchies-backend-go/src/models"
+	"github.com/SelaliAdobor/henchies-backend-go/src/redisutil"
+	"github.com/go-redis/redis/v8"
 	"time"
 )
 
-const PlayerIdTTl = 7200 * time.Second
+const playerIDTTL = 7200 * time.Second
 
-// Returns the game key for a given player for a specific game
-// The IP address must match the first IP address used to access this key
-// If the IP used to access to endpoint changes, an error is returned
-// This prevents other players from using a player's game key
-func (r Repository) GetPlayerGameKey(ctx Context, gameId GameId, playerId PlayerId, ipAddress string) (playerKey PlayerGameKey, err error) {
-	var keyName = RedisKeyPlayerGameKey(gameId, playerId)
-	newPlayerId := uuid.New()
-	newKey := PlayerGameKey{Key: newPlayerId.String(), OwnerIp: ipAddress}
-
-	serializedKey, err := json.Marshal(newKey)
-
-	if err != nil {
-		logrus.Errorf("Failed to marshal new player key", err.Error())
-		return playerKey, err
-	}
-
-	_, err = r.RedisClient.SetNX(ctx, keyName, serializedKey, PlayerIdTTl).Result()
-	if err != nil {
-		logrus.Errorf("Failed to setnx player game key from Redis", err.Error())
-		return playerKey, err
-	}
-
-	result, err := r.RedisClient.Get(ctx, keyName).Result()
-	if err != nil {
-		logrus.Errorf("Failed to get player game key from Redis", err.Error())
-		return playerKey, err
-	}
-	var currentKey PlayerGameKey
-	err = json.Unmarshal([]byte(result), &currentKey)
-	if err != nil {
-		return playerKey, err
-	}
-
-	if currentKey == newKey {
-		err := r.UpdatePlayerStateUnchecked(ctx, gameId, playerId, func(state PlayerState) PlayerState {
-			state.GameKey = currentKey
-			return state
-		})
-		if err != nil{
-			return playerKey, err
-		}
-	}
-
-	if currentKey.OwnerIp != ipAddress {
-		return playerKey, errors.New("ip address mismatch")
-	}
-	return currentKey, nil
-}
-
-func (r *Repository) SubscribePlayerState(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (channel chan PlayerState, err error) {
-
-	valid, err := r.CheckPlayerKey(ctx, gameId, playerId, playerKey)
+// SubscribePlayerState returns a channel that passes on updates to Player State
+// Will immediately return current player state state
+// Returns UnauthorizedPlayer error if the player key is not authorized to subscribe to this player
+func (r *Repository) SubscribePlayerState(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey) (channel chan models.PlayerState, err error) {
+	err = r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 	if err != nil {
 		return nil, err
 	}
-	if !valid {
-		return nil, InvalidPlayerKeyErr
+
+	stateKey := redisKeyPlayerState(gameID, playerID)
+	publishKey := redisKeyPlayerStatePublish(gameID, playerID)
+
+	var playerState models.PlayerState
+
+	subscription, err := redisutil.SubscribeJSON(ctx, r.RedisClient, stateKey, publishKey, &playerState)
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to player state in redis %w", err)
 	}
 
-	var playerState PlayerState
-	subscription, err := redisUtil.SubscribeJson(ctx, r.RedisClient, RedisKeyPlayerState(gameId,playerId), RedisKeyPlayerStatePublish(gameId, playerId), &playerState)
+	channel = make(chan models.PlayerState)
 
-	channel = make(chan PlayerState)
 	go func() {
 		defer close(channel)
 		for {
@@ -87,131 +41,112 @@ func (r *Repository) SubscribePlayerState(ctx Context,
 			if !ok {
 				return
 			}
-			channel <- *latest.(*PlayerState)
+			channel <- *latest.(*models.PlayerState)
 		}
 	}()
 	return channel, nil
 }
-func RedisKeyPlayerState(gameId GameId, playerId PlayerId) string {
-	return fmt.Sprintf("playerState:%s:%s", gameId, playerId)
-}
-func RedisKeyPlayerStatePublish(gameId GameId, playerId PlayerId) string {
-	return fmt.Sprintf("playerPublishState:%s:%s", gameId, playerId)
+
+// GetPlayerStateChecked retrieves current player state, checks for a valid player key
+func (r Repository) GetPlayerStateChecked(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey) (state models.PlayerState, err error) {
+	return r.internalGetPlayerState(ctx, gameID, playerID, playerKey, true)
 }
 
-func RedisKeyPlayerGameKey(gameId GameId, playerId PlayerId) string {
-	return fmt.Sprintf("playerGameKey:%s:%s", gameId, playerId)
+// GetPlayerStateUnchecked retrieves current player state without checking ID, for internal use only, do not allow players to access unchecked player state
+func (r Repository) GetPlayerStateUnchecked(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID) (state models.PlayerState, err error) {
+	return r.internalGetPlayerState(ctx, gameID, playerID, models.PlayerGameKey{}, false)
 }
 
-// Compare the given key to the one stored for the player
+// UpdatePlayerStateChecked updates current player state while checking ID
+// Returns UnauthorizedPlayerError if the key passed did not match the given player ID
+func (r Repository) UpdatePlayerStateChecked(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey, update func(state models.PlayerState) models.PlayerState) error {
+	return r.internalPlayerStateUpdate(ctx, gameID, playerID, playerKey, true, r, update)
+}
+
+// UpdatePlayerStateUnchecked updates current player state without checking ID
+// For server use only, do not allow players to access unchecked player state
+func (r Repository) UpdatePlayerStateUnchecked(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, update func(state models.PlayerState) models.PlayerState) error {
+	return r.internalPlayerStateUpdate(ctx, gameID, playerID, models.PlayerGameKey{}, false, r, update)
+}
+
+// CheckPlayerKey compares the given key to the one stored for the player
 // If there is no error and the 'valid' is false, this was an attempt to access player state with the wrong key
-func (env Repository) CheckPlayerKey(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (valid bool, err error) {
+func (r Repository) CheckPlayerKey(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey)  error {
+	redisKey := redisKeyPlayerGameKey(gameID, playerID)
+	storedKeyJSON, err := r.RedisClient.Get(ctx, redisKey).Result()
 
-	storedKeyJson, err := env.RedisClient.Get(ctx, RedisKeyPlayerGameKey(gameId, playerId)).Result()
 	if err != nil {
-		return false, err
+		return  fmt.Errorf("failed to get player game key from redis (%v): %w", redisKey, err)
 	}
-	var storedKey PlayerGameKey
-	err = json.Unmarshal([]byte(storedKeyJson), &storedKey)
+	var storedKey models.PlayerGameKey
+	err = json.Unmarshal([]byte(storedKeyJSON), &storedKey)
 	if err != nil {
-		return false, err
+		return  fmt.Errorf("failed to unmarshal player game key from redis (%v): %w", redisKey, err)
 	}
 
-	return storedKey.Key == playerKey.Key, nil
+	if storedKey.Key != playerKey.Key {
+		return UnauthorizedPlayer
+	}
+	return nil
 }
 
-//Retrieve current player state, checks for a valid player key
-func (r Repository) GetPlayerStateChecked(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey) (state PlayerState, err error) {
-
-	return r.internalGetPlayerState(ctx, gameId, playerId, playerKey, true)
-}
-
-//Retrieve current player state without checking ID, for internal use only, do not allow players to access unchecked player state
-func (r Repository) GetPlayerStateUnchecked(ctx Context,
-	gameId GameId, playerId PlayerId) (state PlayerState, err error) {
-
-	return r.internalGetPlayerState(ctx, gameId, playerId, PlayerGameKey{}, false)
-}
-
-func  (r Repository) internalGetPlayerState(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey, shouldCheck bool) (state PlayerState, err error) {
-
-	state = PlayerState{}
-
+func (r Repository) internalGetPlayerState(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey, shouldCheck bool) (state models.PlayerState, err error) {
 	if shouldCheck {
-		isValidKey, err := r.CheckPlayerKey(ctx, gameId, playerId, playerKey)
+		 err := r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 		if err != nil {
 			return state, err
 		}
-		if !isValidKey {
-			return state, InvalidPlayerKeyErr
-		}
 	}
 
-	var keyName = RedisKeyPlayerState(gameId, playerId)
+	var keyName = redisKeyPlayerState(gameID, playerID)
 
-	result, err := r.RedisClient.Get(ctx, keyName).Result()
-	if err != nil {
-		logrus.Errorf("Failed to get player state from Redis", err.Error())
-		return state, err
-	}
-	err = json.Unmarshal([]byte(result), &state)
+	err = redisutil.GetRedisJSON(ctx, r.RedisClient, keyName, &state)
 
 	if err != nil {
-		logrus.Errorf("Failed to deserialize player state from Redis", err.Error())
-		return state, err
+		return state, fmt.Errorf("failed to get player state from redis: %w", err)
 	}
-	return state, nil
+	return
 }
 
-//Update current player state while checking ID
-//Returns InvalidPlayerKeyErr if the key passed did not match the given player ID
-func (r Repository) UpdatePlayerStateChecked(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey, update func(state PlayerState) PlayerState) error {
-	return r.internalPlayerStateUpdate(ctx, gameId, playerId, playerKey, true, r, update)
-}
-
-//Update current player state without checking ID
-//For internal use only, do not allow players to access unchecked player state
-func (r Repository) UpdatePlayerStateUnchecked(ctx Context,
-	gameId GameId, playerId PlayerId, update func(state PlayerState) PlayerState) error {
-
-	return r.internalPlayerStateUpdate(ctx, gameId, playerId, PlayerGameKey{}, false, r, update)
-}
-
-func (r Repository) internalPlayerStateUpdate(ctx Context,
-	gameId GameId, playerId PlayerId, playerKey PlayerGameKey, shouldCheck bool, env Repository, update func(state PlayerState) PlayerState) error {
-
+func (r Repository) internalPlayerStateUpdate(ctx context.Context,
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey, shouldCheck bool, env Repository, update func(state models.PlayerState) models.PlayerState) error {
 	if shouldCheck {
-		isValidKey, err := env.CheckPlayerKey(ctx, gameId, playerId, playerKey)
+		err := env.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 		if err != nil {
 			return err
 		}
-		if !isValidKey {
-			return InvalidPlayerKeyErr
-		}
 	}
 
-	return internalPlayerStateUpdateTransaction(ctx, env.RedisClient, gameId, playerId, update)
+	return internalPlayerStateUpdateTransaction(ctx, env.RedisClient, gameID, playerID, update)
 }
 
-func internalPlayerStateUpdateTransaction(ctx Context,
-	client *Client, gameId GameId, playerId PlayerId, update func(state PlayerState) PlayerState) error {
+func internalPlayerStateUpdateTransaction(ctx context.Context,
+	client *redis.Client, gameID models.GameID, playerID models.PlayerID, update func(state models.PlayerState) models.PlayerState) error {
+	stateKey := redisKeyPlayerState(gameID, playerID)
+	publishKey := redisKeyPlayerStatePublish(gameID, playerID)
 
-	stateKey := RedisKeyPlayerState(gameId, playerId)
-	publishKey := RedisKeyPlayerStatePublish(gameId, playerId)
+	var playerState models.PlayerState
 
-	return redisUtil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, GameStateTTL, 0,
-		func(data []byte) (interface{}, error) {
-			var playerState PlayerState
-			err := json.Unmarshal(data, &playerState)
-			return playerState, err
-		},
-		func() interface{} {
-			return PlayerState{}
-		}, func(value interface{}) interface{} {
-			return update(value.(PlayerState))
+	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, playerState,
+		func(value interface{}) interface{} {
+			return update(value.(models.PlayerState))
 		})
+}
+
+func redisKeyPlayerState(gameID models.GameID, playerID models.PlayerID) string {
+	return fmt.Sprintf("playerState:%s:%s", gameID, playerID)
+}
+
+func redisKeyPlayerStatePublish(gameID models.GameID, playerID models.PlayerID) string {
+	return fmt.Sprintf("playerPublishState:%s:%s", gameID, playerID)
+}
+
+func redisKeyPlayerGameKey(gameID models.GameID, playerID models.PlayerID) string {
+	return fmt.Sprintf("playerGameKey:%s:%s", gameID, playerID)
 }
