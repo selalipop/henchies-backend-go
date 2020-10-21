@@ -29,7 +29,6 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 			ctx.SSEvent("game_state_changed", state)
 			return true
 		}
-		close(stateChan)
 		return false
 	})
 }

@@ -5,7 +5,6 @@ import (
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
 // PlayerLeftWebhook is called by Photon during a player leaving room
@@ -41,9 +40,5 @@ func (c *Controllers) PlayerLeftWebhook(ctx *gin.Context) {
 		return gameState
 	})
 
-	if err != nil {
-		writeInternalErrorResponse(ctx, err)
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	writeSuccessIfNoErrors(ctx, err)
 }

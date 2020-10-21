@@ -11,11 +11,13 @@ var (
 	_GamePhaseNameToValue = map[string]GamePhase{
 		"WaitingForPlayers": WaitingForPlayers,
 		"Starting":          Starting,
+		"Started":           Started,
 	}
 
 	_GamePhaseValueToName = map[GamePhase]string{
 		WaitingForPlayers: "WaitingForPlayers",
 		Starting:          "Starting",
+		Started:           "Started",
 	}
 )
 
@@ -25,6 +27,7 @@ func init() {
 		_GamePhaseNameToValue = map[string]GamePhase{
 			interface{}(WaitingForPlayers).(fmt.Stringer).String(): WaitingForPlayers,
 			interface{}(Starting).(fmt.Stringer).String():          Starting,
+			interface{}(Started).(fmt.Stringer).String():           Started,
 		}
 	}
 }

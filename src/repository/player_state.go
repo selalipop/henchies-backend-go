@@ -76,17 +76,17 @@ func (r Repository) UpdatePlayerStateUnchecked(ctx context.Context,
 // CheckPlayerKey compares the given key to the one stored for the player
 // If there is no error and the 'valid' is false, this was an attempt to access player state with the wrong key
 func (r Repository) CheckPlayerKey(ctx context.Context,
-	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey)  error {
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey) error {
 	redisKey := redisKeyPlayerGameKey(gameID, playerID)
 	storedKeyJSON, err := r.RedisClient.Get(ctx, redisKey).Result()
 
 	if err != nil {
-		return  fmt.Errorf("failed to get player game key from redis (%v): %w", redisKey, err)
+		return fmt.Errorf("failed to get player game key from redis (%v): %w", redisKey, err)
 	}
 	var storedKey models.PlayerGameKey
 	err = json.Unmarshal([]byte(storedKeyJSON), &storedKey)
 	if err != nil {
-		return  fmt.Errorf("failed to unmarshal player game key from redis (%v): %w", redisKey, err)
+		return fmt.Errorf("failed to unmarshal player game key from redis (%v): %w", redisKey, err)
 	}
 
 	if storedKey.Key != playerKey.Key {
@@ -98,7 +98,7 @@ func (r Repository) CheckPlayerKey(ctx context.Context,
 func (r Repository) internalGetPlayerState(ctx context.Context,
 	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey, shouldCheck bool) (state models.PlayerState, err error) {
 	if shouldCheck {
-		 err := r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
+		err := r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 		if err != nil {
 			return state, err
 		}
@@ -133,9 +133,9 @@ func internalPlayerStateUpdateTransaction(ctx context.Context,
 
 	var playerState models.PlayerState
 
-	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, playerState,
+	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, &playerState,
 		func(value interface{}) interface{} {
-			return update(value.(models.PlayerState))
+			return update(*value.(*models.PlayerState))
 		})
 }
 

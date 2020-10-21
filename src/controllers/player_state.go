@@ -24,6 +24,7 @@ func (c *Controllers) GetPlayerGameKey(ctx *gin.Context) {
 	if err != nil {
 		logrus.Errorf("failed to get player game key: %v", err)
 		writeInternalErrorResponse(ctx, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"id": id})
 }

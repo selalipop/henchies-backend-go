@@ -22,7 +22,7 @@ func GetRedisJSON(ctx context.Context, client *redis.Client, key string, marshal
 
 // SubscribeJSON retrieves a JSON serialized value from Redis and listens for updates to it's value, marshalTo must be a pointer
 // The initial value is fetched and sent using getKey, use an empty string to disable this behavior
-func SubscribeJSON(ctx context.Context,client *redis.Client, getKey string, pubSubKey string, marshalTo interface{})(channel chan interface{}, err error) {
+func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pubSubKey string, marshalTo interface{}) (channel chan interface{}, err error) {
 	listen := client.Subscribe(ctx, pubSubKey).Channel()
 
 	send := make(chan interface{})
@@ -70,19 +70,19 @@ func UpdateKeyTransaction(ctx context.Context,
 
 			if err != nil {
 				if err != redis.Nil {
-					return fmt.Errorf("failed to get current value from redis during update transaction %w", err)
+					return backoff.Permanent(fmt.Errorf("failed to get current value from redis during update transaction %w", err))
 				}
 			} else {
 				err = json.Unmarshal([]byte(valueJSON), defaultValuePtr)
 				if err != nil {
-					return fmt.Errorf("failed to deserialize current value during update transaction %w", err)
+					return backoff.Permanent(fmt.Errorf("failed to deserialize current value during update transaction %w", err))
 				}
 			}
 
 			newValue := update(defaultValuePtr)
 			newValueSerialized, err := json.Marshal(newValue)
 			if err != nil {
-				return fmt.Errorf( "failed to serialize new value during update transaction %w", err)
+				return backoff.Permanent(fmt.Errorf("failed to serialize new value during update transaction %w", err))
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, key, newValueSerialized, ttl)
@@ -91,7 +91,13 @@ func UpdateKeyTransaction(ctx context.Context,
 				}
 				return nil
 			})
-			return fmt.Errorf( "failed to to run update transaction pipeline %w", err)
+			if err != nil {
+				if err == redis.TxFailedErr {
+					return fmt.Errorf("failed to to run update transaction pipeline due to value change %w", err)
+				}
+				return backoff.Permanent(fmt.Errorf("failed to to run update transaction pipeline %w", err))
+			}
+			return nil
 		}, key)
 	}
 

@@ -115,9 +115,9 @@ func internalUpdateGameStateTx(ctx context.Context, client *redis.Client, gameID
 
 	var gameState models.GameState
 
-	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, gameState,
+	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, &gameState,
 		func(value interface{}) interface{} {
-			return update(value.(models.GameState))
+			return update(*value.(*models.GameState))
 		})
 }
 

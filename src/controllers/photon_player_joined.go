@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"math/rand"
-	"net/http"
 	"time"
 )
 
@@ -25,7 +24,9 @@ func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 	logrus.Debugf("processing player joined event from Photon: %v", request)
 
 	err := c.Repository.UpdatePlayerStateUnchecked(ctx, request.GameID, request.UserID, func(state models.PlayerState) models.PlayerState {
-		state.CurrentGame = request.GameID
+		state = models.PlayerState{
+			CurrentGame: request.GameID,
+		}
 		return state
 	})
 
@@ -50,11 +51,7 @@ func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 		return gameState
 	})
 
-	if err != nil {
-		writeInternalErrorResponse(ctx, err)
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	writeSuccessIfNoErrors(ctx, err)
 }
 
 func startGame(ctx context.Context, gameID models.GameID, env *Controllers) {
