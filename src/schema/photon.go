@@ -14,14 +14,14 @@ type PhotonArgs struct {
 // PhotonExtendedArgs represents extended set of arguments sent by Photon to all webhooks besides RoomClosed
 type PhotonExtendedArgs struct {
 	ActorNr  string          `json:"ActorNr"`
-	UserID   models.PlayerID `json:"UserId"`
+	PlayerID models.PlayerID `json:"UserId"`
 	NickName string          `json:"NickName"`
 	PhotonArgs
 }
 
 // CustomRoomProperties represents custom properties sent during room creation
-type  CustomRoomProperties struct{
-	ImposterCount  int          `json:"ImposterCount"`
+type CustomRoomProperties struct {
+	ImposterCount int `json:"ImposterCount"`
 }
 
 // CreateOptions represents options sent during room creation
@@ -35,12 +35,11 @@ type CreateOptions struct {
 	CheckUserOnJoin    bool                 `json:"CheckUserOnJoin"`
 	DeleteCacheOnLeave bool                 `json:"DeleteCacheOnLeave"`
 	SuppressRoomEvents bool                 `json:"SuppressRoomEvents"`
-
 }
 
 // RoomCreatedRequest represents a Photon webhook call for a room being created
 type RoomCreatedRequest struct {
-	CreateOptions         CreateOptions                  `json:"CreateOptions"`
+	CreateOptions CreateOptions `json:"CreateOptions"`
 	PhotonExtendedArgs
 }
 
@@ -49,8 +48,12 @@ type PlayerJoinedRequest struct {
 	PhotonExtendedArgs
 }
 
-
 // PlayerLeftRequest represents a Photon webhook call for a player leaving a room
 type PlayerLeftRequest struct {
 	PhotonExtendedArgs
+}
+
+// RoomClosedRequest represents a Photon webhook call for a room being closed
+type RoomClosedRequest struct {
+	PhotonArgs
 }

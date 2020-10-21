@@ -80,17 +80,29 @@ func UpdateKeyTransaction(ctx context.Context,
 			}
 
 			newValue := update(defaultValuePtr)
-			newValueSerialized, err := json.Marshal(newValue)
-			if err != nil {
-				return backoff.Permanent(fmt.Errorf("failed to serialize new value during update transaction %w", err))
-			}
-			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, newValueSerialized, ttl)
-				if len(publishKey) > 0 {
-					pipe.Publish(ctx, publishKey, newValueSerialized)
+
+			if newValue == nil {
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					pipe.Del(ctx, key)
+					if len(publishKey) > 0 {
+						pipe.Del(ctx, publishKey)
+					}
+					return nil
+				})
+			} else {
+				newValueSerialized, err := json.Marshal(newValue)
+				if err != nil {
+					return backoff.Permanent(fmt.Errorf("failed to serialize new value during update transaction %w", err))
 				}
-				return nil
-			})
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					pipe.Set(ctx, key, newValueSerialized, ttl)
+					if len(publishKey) > 0 {
+						pipe.Publish(ctx, publishKey, newValueSerialized)
+					}
+					return nil
+				})
+			}
+
 			if err != nil {
 				if err == redis.TxFailedErr {
 					return fmt.Errorf("failed to to run update transaction pipeline due to value change %w", err)

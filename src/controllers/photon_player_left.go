@@ -18,24 +18,19 @@ func (c *Controllers) PlayerLeftWebhook(ctx *gin.Context) {
 
 	logrus.Debugf("processing player left event from Photon: %v", request)
 
-	err := c.Repository.UpdatePlayerStateUnchecked(ctx, request.GameID, request.UserID, func(state models.PlayerState) models.PlayerState {
-		if state.CurrentGame == request.GameID {
-			state = models.PlayerState{}
-		}
-		return state
-	})
+	err := c.Repository.ClearPlayerState(ctx, request.GameID, request.PlayerID)
 
 	if err != nil {
 		writeInternalErrorResponse(ctx, err)
 		return
 	}
 	err = c.Repository.UpdateGameState(ctx, request.GameID, func(gameState models.GameState) models.GameState {
-		if !gameState.Players.Contains(request.UserID) {
+		if !gameState.Players.Contains(request.PlayerID) {
 			return gameState
 		}
 
 		gameState.Players = gameState.Players.Filter(func(playerID models.PlayerID) bool {
-			return playerID != request.UserID
+			return playerID != request.PlayerID
 		})
 		return gameState
 	})

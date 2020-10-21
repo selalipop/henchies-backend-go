@@ -8,6 +8,7 @@ import (
 	"github.com/SelaliAdobor/henchies-backend-go/src/redisutil"
 	"github.com/cenkalti/backoff"
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -76,6 +77,27 @@ func (r *Repository) UpdateGameState(ctx context.Context, gameID models.GameID, 
 	return backoff.Retry(operation, txBackoff)
 }
 
+// ClearGameState clears game state transactionally
+func (r *Repository) ClearGameState(ctx context.Context, gameID models.GameID) error {
+	operation := func() error {
+		return internalUpdateGameStateTxPtr(ctx, r.RedisClient, gameID, func(gameState *models.GameState) *models.GameState {
+			for _, playerID := range gameState.Players {
+				go func(currentPlayer models.PlayerID) {
+					err := r.ClearPlayerState(ctx, gameID, currentPlayer)
+					if err != nil {
+						logrus.Errorf("failed to clear player state on game state clear %v", err)
+					}
+				}(playerID)
+			}
+			return nil
+		})
+	}
+
+	txBackoff := backoff.NewExponentialBackOff()
+	txBackoff.MaxElapsedTime = maxElapsedGameUpdateTime
+	return backoff.Retry(operation, txBackoff)
+}
+
 // SubscribeGameState returns a channel that passes on updates to Game State
 // Will immediately return current game state
 // Returns UnauthorizedPlayer error if the player key is not authorized to subscribe to this game
@@ -108,8 +130,13 @@ func (r *Repository) SubscribeGameState(
 	}()
 	return channel, nil
 }
-
 func internalUpdateGameStateTx(ctx context.Context, client *redis.Client, gameID models.GameID, update func(gameState models.GameState) models.GameState) error {
+	return internalUpdateGameStateTxPtr(ctx, client, gameID, func(gameState *models.GameState) *models.GameState {
+		newValue := update(*gameState)
+		return &newValue
+	})
+}
+func internalUpdateGameStateTxPtr(ctx context.Context, client *redis.Client, gameID models.GameID, update func(gameState *models.GameState) *models.GameState) error {
 	stateKey := redisKeyGameState(gameID)
 	publishKey := redisPublishKeyGameState(gameID)
 
@@ -117,7 +144,7 @@ func internalUpdateGameStateTx(ctx context.Context, client *redis.Client, gameID
 
 	return redisutil.UpdateKeyTransaction(ctx, client, stateKey, publishKey, gameStateRedisTTL, 0, &gameState,
 		func(value interface{}) interface{} {
-			return update(*value.(*models.GameState))
+			return update(value.(*models.GameState))
 		})
 }
 

@@ -15,7 +15,7 @@ type Arguments struct {
 	RedisConnectURL string `required:"true"`
 }
 
-func main(){
+func main() {
 	args := GetArguments()
 
 	redisOptions, err := redis.ParseURL(args.RedisConnectURL)
@@ -36,8 +36,9 @@ func main(){
 
 	g := gin.New()
 
-	log := logrus.New()
-	g.Use(ginlogrus.Logger(log), gin.Recovery())
+	logger := logrus.StandardLogger()
+	logger.SetLevel(logrus.TraceLevel)
+	g.Use(ginlogrus.Logger(logger), gin.Recovery())
 
 	SetupRoutes(g, c)
 
@@ -46,6 +47,7 @@ func main(){
 		logrus.Fatal(err)
 	}
 }
+
 //goland:noinspection ALL
 func SetupRoutes(g *gin.Engine, c controllers.Controllers) {
 	g.GET("/", c.GetInfo)
@@ -56,6 +58,8 @@ func SetupRoutes(g *gin.Engine, c controllers.Controllers) {
 	g.GET("/game/state", c.GetGameState)
 
 	g.POST("/photonwebhooks/roomcreated", c.RoomCreatedWebhook)
+	g.POST("/photonwebhooks/roomclosed", c.RoomClosedWebhook)
+
 	g.POST("/photonwebhooks/playerjoined", c.PlayerJoinedWebhook)
 	g.POST("/photonwebhooks/playerleft", c.PlayerLeftWebhook)
 }

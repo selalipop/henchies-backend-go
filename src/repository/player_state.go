@@ -73,6 +73,21 @@ func (r Repository) UpdatePlayerStateUnchecked(ctx context.Context,
 	return r.internalPlayerStateUpdate(ctx, gameID, playerID, models.PlayerGameKey{}, false, r, update)
 }
 
+// ClearPlayerState clears player's data including current game
+// For server use only, do not allow players to clear player state
+func (r Repository) ClearPlayerState(ctx context.Context, gameID models.GameID, playerID models.PlayerID) error {
+	return r.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {
+		if state.CurrentGame != gameID {
+			return state
+		}
+		return models.PlayerState{
+			CurrentGame: "",
+			GameKey:     models.PlayerGameKey{},
+			IsImposter:  false,
+		}
+	})
+}
+
 // CheckPlayerKey compares the given key to the one stored for the player
 // If there is no error and the 'valid' is false, this was an attempt to access player state with the wrong key
 func (r Repository) CheckPlayerKey(ctx context.Context,
