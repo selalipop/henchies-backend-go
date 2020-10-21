@@ -3,10 +3,10 @@ package redisutil
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/cenkalti/backoff"
 	"github.com/go-redis/redis/v8"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -15,11 +15,11 @@ import (
 func GetRedisJSON(ctx context.Context, client *redis.Client, key string, marshalTo interface{}) error {
 	value, err := client.Get(ctx, key).Result()
 	if err != nil {
-		return errors.Wrapf(err, "failed to get json redis key (%v)", key)
+		return fmt.Errorf("failed to get json redis key (%v): %w", key, err)
 	}
 
 	err = json.Unmarshal([]byte(value), marshalTo)
-	return errors.Wrapf(err, "failed to unmarshal json retrieved from redis key (%v)", key)
+	return fmt.Errorf("failed to unmarshal json retrieved from redis key (%v): %w", key, err)
 }
 
 // SubscribeJSON retrieves a JSON serialized value from Redis and listens for updates to it's value, marshalTo must be a pointer
@@ -65,12 +65,11 @@ func UpdateKeyTransaction(ctx context.Context,
 	maxRetryDuration time.Duration, defaultValuePtr interface{}, update func(value interface{}) interface{}) (err error) {
 	operation := func() error {
 		return client.Watch(ctx, func(tx *redis.Tx) error {
-
 			err = GetRedisJSON(ctx, client, key, defaultValuePtr)
 
 			if err != nil {
-				if err != redis.Nil {
-					return backoff.Permanent(fmt.Errorf("failed to get current value from redis during update transaction %w", err))
+				if !errors.Is(err, redis.Nil) {
+					return backoff.Permanent(fmt.Errorf("failed to get current value from redis during update transaction: %w", err))
 				}
 			}
 
@@ -79,7 +78,7 @@ func UpdateKeyTransaction(ctx context.Context,
 			_, err = tx.TxPipelined(ctx, getPiperlinerForValue(ctx, newValue, key, publishKey, ttl))
 
 			if err != nil {
-				if err == redis.TxFailedErr {
+				if errors.Is(err, redis.TxFailedErr) {
 					return fmt.Errorf("failed to to run update transaction pipeline due to value change %w", err)
 				}
 				return backoff.Permanent(fmt.Errorf("failed to to run update transaction pipeline %w", err))
