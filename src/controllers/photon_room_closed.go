@@ -15,7 +15,7 @@ func (c *Controllers) RoomClosedWebhook(ctx *gin.Context) {
 		return
 	}
 
-	logrus.Debugf("processing room closed event from Photon: %v", request)
+	logrus.Debugf("processing room closed event from Photon: %+v", request)
 
 	err := c.Repository.ClearGameState(ctx, request.GameID)
 

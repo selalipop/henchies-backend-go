@@ -21,7 +21,7 @@ func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 		return
 	}
 
-	logrus.Debugf("processing player joined event from Photon: %v", request)
+	logrus.Debugf("processing player joined event from Photon: %+v", request)
 
 	err := c.Repository.UpdatePlayerStateUnchecked(ctx, request.GameID, request.PlayerID, func(state models.PlayerState) models.PlayerState {
 		state = models.PlayerState{
@@ -36,14 +36,14 @@ func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 	}
 	err = c.Repository.UpdateGameState(ctx, request.GameID, func(gameState models.GameState) models.GameState {
 		if gameState.Players.Contains(request.PlayerID) {
-			logrus.Debugf("received player joined but player was already in game: %v", request)
+			logrus.Debugf("received player joined but player was already in game: %+v", request)
 			return gameState
 		}
 
 		gameState.Players = append(gameState.Players, request.PlayerID)
 
 		if len(gameState.Players) == gameState.MaxPlayers {
-			logrus.Debugf("starting game after player joined: %v", request)
+			logrus.Debugf("starting game after player joined: %+v", request)
 
 			gameState.Phase = models.Starting
 			go startGame(ctx, request.GameID, c)
@@ -82,7 +82,7 @@ func startGame(ctx context.Context, gameID models.GameID, env *Controllers) {
 				return state
 			})
 			if err != nil {
-				logrus.Error("failed to update player state", err)
+				logrus.Errorf("failed to update player state %v", err)
 			}
 			remainingColors = remainingColors.DropTop(1)
 		}

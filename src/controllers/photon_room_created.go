@@ -16,7 +16,7 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 		return
 	}
 
-	logrus.Debugf("processing room created event from Photon: %v", request)
+	logrus.Debugf("processing room created event from Photon: %+v", request)
 
 	var imposterCount = request.CreateOptions.CustomProperties.ImposterCount
 	if imposterCount == 0 {

@@ -2,12 +2,11 @@ package repository
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/redisutil"
 	"github.com/cenkalti/backoff"
 	"github.com/go-redis/redis/v8"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -18,16 +17,16 @@ var maxElapsedGameUpdateTime = 5 * time.Minute
 // InitGameState initializes game state with given parameters
 // Returns an error if the game has already been initialized
 func (r *Repository) InitGameState(ctx context.Context, gameID models.GameID, startingPlayerCount int, imposterCount int) error {
-	exists, err :=
-		r.RedisClient.Exists(ctx, redisKeyGameState(gameID)).Result()
+	exists, err := r.checkIfGameExists(ctx, gameID)
 	if err != nil {
 		return err
 	}
-	if exists > 0 {
+
+	if exists {
 		return errors.New("game already initialized")
 	}
 
-	return internalUpdateGameStateTx(ctx, r.RedisClient, gameID, func(gameState models.GameState) models.GameState {
+	err = internalUpdateGameStateTx(ctx, r.RedisClient, gameID, func(gameState models.GameState) models.GameState {
 		return models.GameState{
 			ImposterCount: imposterCount,
 			MaxPlayers:    startingPlayerCount,
@@ -35,27 +34,41 @@ func (r *Repository) InitGameState(ctx context.Context, gameID models.GameID, st
 			Players:       []models.PlayerID{},
 		}
 	})
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize game state")
+	}
+	return nil
+}
+
+func (r *Repository) checkIfGameExists(ctx context.Context, gameID models.GameID) (bool, error) {
+	exists, err := r.RedisClient.Exists(ctx, redisKeyGameState(gameID)).Result()
+	if err != nil {
+		return false, errors.Wrap(err, "error checking if game already exists")
+	}
+	return exists > 0, nil
 }
 
 // AddPlayerToGame adds a player to an existing game
 // Will update game state and player state to reflect current game
 func (r *Repository) AddPlayerToGame(ctx context.Context, gameID models.GameID, playerID models.PlayerID) error {
-	exists, err :=
-		r.RedisClient.Exists(ctx, redisKeyGameState(gameID)).Result()
-
+	exists, err := r.checkIfGameExists(ctx, gameID)
 	if err != nil {
 		return err
 	}
-	if exists > 0 {
-		return errors.New("game already initialized")
+
+	if !exists {
+		return errors.New("attempt to add player to non-existent game")
 	}
 
 	err = internalUpdateGameStateTx(ctx, r.RedisClient, gameID, func(gameState models.GameState) models.GameState {
+		if gameState.Players.Contains(playerID) {
+			return gameState
+		}
 		gameState.Players = append(gameState.Players, playerID)
 		return gameState
 	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to add player to game")
 	}
 
 	return r.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {
@@ -85,7 +98,7 @@ func (r *Repository) ClearGameState(ctx context.Context, gameID models.GameID) e
 				go func(currentPlayer models.PlayerID) {
 					err := r.ClearPlayerState(ctx, gameID, currentPlayer)
 					if err != nil {
-						logrus.Errorf("failed to clear player state on game state clear %v", err)
+						logrus.Errorf("failed to clear player state while clearing game state %v", err)
 					}
 				}(playerID)
 			}
@@ -146,12 +159,4 @@ func internalUpdateGameStateTxPtr(ctx context.Context, client *redis.Client, gam
 		func(value interface{}) interface{} {
 			return update(value.(*models.GameState))
 		})
-}
-
-func redisPublishKeyGameState(gameID models.GameID) string {
-	return fmt.Sprintf("playerGamePubSubKey:%s", gameID)
-}
-
-func redisKeyGameState(gameID models.GameID) string {
-	return fmt.Sprintf("playerGameKey:%s", gameID)
 }

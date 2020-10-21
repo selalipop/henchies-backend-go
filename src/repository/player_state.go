@@ -153,15 +153,3 @@ func internalPlayerStateUpdateTransaction(ctx context.Context,
 			return update(*value.(*models.PlayerState))
 		})
 }
-
-func redisKeyPlayerState(gameID models.GameID, playerID models.PlayerID) string {
-	return fmt.Sprintf("playerState:%s:%s", gameID, playerID)
-}
-
-func redisKeyPlayerStatePublish(gameID models.GameID, playerID models.PlayerID) string {
-	return fmt.Sprintf("playerPublishState:%s:%s", gameID, playerID)
-}
-
-func redisKeyPlayerGameKey(gameID models.GameID, playerID models.PlayerID) string {
-	return fmt.Sprintf("playerGameKey:%s:%s", gameID, playerID)
-}

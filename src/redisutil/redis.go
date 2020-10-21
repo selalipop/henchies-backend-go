@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/cenkalti/backoff"
 	"github.com/go-redis/redis/v8"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -14,10 +15,11 @@ import (
 func GetRedisJSON(ctx context.Context, client *redis.Client, key string, marshalTo interface{}) error {
 	value, err := client.Get(ctx, key).Result()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to get json redis key (%v)", key)
 	}
 
-	return json.Unmarshal([]byte(value), marshalTo)
+	err = json.Unmarshal([]byte(value), marshalTo)
+	return errors.Wrapf(err, "failed to unmarshal json retrieved from redis key (%v)", key)
 }
 
 // SubscribeJSON retrieves a JSON serialized value from Redis and listens for updates to it's value, marshalTo must be a pointer
@@ -32,7 +34,7 @@ func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pub
 		if getKey != "" {
 			err := GetRedisJSON(ctx, client, getKey, marshalTo)
 			if err != nil {
-				logrus.Error("failed to unmarshal Game State from key", err)
+				logrus.Error("failed to unmarshal game state from key", err)
 				return
 			}
 			send <- marshalTo
@@ -46,7 +48,7 @@ func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pub
 
 			err := json.Unmarshal([]byte(message.Payload), marshalTo)
 			if err != nil {
-				logrus.Error("failed to unmarshal Game State from pubsub", err)
+				logrus.Error("failed to unmarshal game state from pubsub", err)
 				break
 			}
 			send <- marshalTo
@@ -59,49 +61,22 @@ func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pub
 // UpdateKeyTransaction updates a JSON serialized value from Redis transactionally
 // The Update Method will be called multiple times if the value is modified by another process
 func UpdateKeyTransaction(ctx context.Context,
-	client *redis.Client, key string, publishKey string, ttl time.Duration, maxRetryDuration time.Duration,
-	defaultValuePtr interface{},
-	update func(value interface{}) interface{}) (err error) {
+	client *redis.Client, key string, publishKey string, ttl time.Duration,
+	maxRetryDuration time.Duration, defaultValuePtr interface{}, update func(value interface{}) interface{}) (err error) {
 	operation := func() error {
 		return client.Watch(ctx, func(tx *redis.Tx) error {
-			var valueJSON string
 
-			valueJSON, err = tx.Get(ctx, key).Result()
+			err = GetRedisJSON(ctx, client, key, defaultValuePtr)
 
 			if err != nil {
 				if err != redis.Nil {
 					return backoff.Permanent(fmt.Errorf("failed to get current value from redis during update transaction %w", err))
 				}
-			} else {
-				err = json.Unmarshal([]byte(valueJSON), defaultValuePtr)
-				if err != nil {
-					return backoff.Permanent(fmt.Errorf("failed to deserialize current value during update transaction %w", err))
-				}
 			}
 
 			newValue := update(defaultValuePtr)
 
-			if newValue == nil {
-				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					pipe.Del(ctx, key)
-					if len(publishKey) > 0 {
-						pipe.Del(ctx, publishKey)
-					}
-					return nil
-				})
-			} else {
-				newValueSerialized, err := json.Marshal(newValue)
-				if err != nil {
-					return backoff.Permanent(fmt.Errorf("failed to serialize new value during update transaction %w", err))
-				}
-				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					pipe.Set(ctx, key, newValueSerialized, ttl)
-					if len(publishKey) > 0 {
-						pipe.Publish(ctx, publishKey, newValueSerialized)
-					}
-					return nil
-				})
-			}
+			_, err = tx.TxPipelined(ctx, getPiperlinerForValue(ctx, newValue, key, publishKey, ttl))
 
 			if err != nil {
 				if err == redis.TxFailedErr {
@@ -116,4 +91,26 @@ func UpdateKeyTransaction(ctx context.Context,
 	txBackoff := backoff.NewExponentialBackOff()
 	txBackoff.MaxElapsedTime = maxRetryDuration
 	return backoff.Retry(operation, txBackoff)
+}
+
+func getPiperlinerForValue(ctx context.Context, newValue interface{}, key string, publishKey string, ttl time.Duration) func(pipe redis.Pipeliner) error {
+	return func(pipe redis.Pipeliner) error {
+		if newValue == nil {
+			pipe.Del(ctx, key)
+			if len(publishKey) > 0 {
+				pipe.Del(ctx, publishKey)
+			}
+			return nil
+		}
+		newValueSerialized, err := json.Marshal(newValue)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("failed to serialize new value during update transaction %w", err))
+		}
+
+		pipe.Set(ctx, key, newValueSerialized, ttl)
+		if len(publishKey) > 0 {
+			pipe.Publish(ctx, publishKey, newValueSerialized)
+		}
+		return nil
+	}
 }
