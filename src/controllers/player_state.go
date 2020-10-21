@@ -52,7 +52,7 @@ func (c *Controllers) GetPlayerState(ctx *gin.Context) {
 
 	ctx.Stream(func(w io.Writer) bool {
 		if state, ok := <-stateChan; ok {
-			ctx.SSEvent("player_state_changed", state)
+			ctx.SSEvent("message", state)
 			return true
 		}
 		return false

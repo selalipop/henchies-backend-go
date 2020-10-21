@@ -26,7 +26,7 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 
 	ctx.Stream(func(w io.Writer) bool {
 		if state, ok := <-stateChan; ok {
-			ctx.SSEvent("game_state_changed", state)
+			ctx.SSEvent("message", state)
 			return true
 		}
 		return false
