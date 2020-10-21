@@ -18,8 +18,10 @@ func GetRedisJSON(ctx context.Context, client *redis.Client, key string, marshal
 		return fmt.Errorf("failed to get json redis key (%v): %w", key, err)
 	}
 
-	err = json.Unmarshal([]byte(value), marshalTo)
-	return fmt.Errorf("failed to unmarshal json retrieved from redis key (%v): %w", key, err)
+	if err = json.Unmarshal([]byte(value), marshalTo); err != nil {
+		return fmt.Errorf("failed to unmarshal json retrieved from redis key (%v): %w", key, err)
+	}
+	return nil
 }
 
 // SubscribeJSON retrieves a JSON serialized value from Redis and listens for updates to it's value, marshalTo must be a pointer
