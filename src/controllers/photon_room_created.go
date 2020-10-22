@@ -19,6 +19,11 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 
 	logrus.Debugf("processing room created event from Photon: %+v", request)
 
+	if !request.CreateOptions.CustomProperties.IsHenchiesGame {
+		logrus.Debugf("ignoring room created due to missing IsHenchiesGame property: %+v", request)
+		writeSuccessIfNoErrors(ctx)
+	}
+
 	var imposterCount = request.CreateOptions.CustomProperties.ImposterCount
 	if imposterCount == 0 {
 		//TODO: Get real imposter count
