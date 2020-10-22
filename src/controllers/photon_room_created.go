@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-const gameLobbyId = "GameLobby"
+const gameLobbyID = "GameLobby"
 
 // RoomCreatedWebhook is called by Photon during a room being created
 func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
@@ -21,7 +21,7 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 
 	logrus.Debugf("processing room created event from Photon: %+v", request)
 
-	if request.CreateOptions.LobbyID != gameLobbyId {
+	if request.CreateOptions.LobbyID != gameLobbyID {
 		logrus.Debugf("ignoring room created outside of game lobby: %+v", request)
 		writeSuccessIfNoErrors(ctx)
 	}

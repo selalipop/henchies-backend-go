@@ -16,7 +16,7 @@ func (c *Controllers) PlayerLeftWebhook(ctx *gin.Context) {
 		return
 	}
 
-	logrus.Debugf("processing player left event from Photon: %+v", request)
+	logrus.Debugf("processing player s from Photon: %+v", request)
 
 	err := c.Repository.ClearPlayerState(ctx, request.GameID, request.PlayerID)
 
