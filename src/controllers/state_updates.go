@@ -1,11 +1,12 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/repository"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
-	websocketutil "github.com/SelaliAdobor/henchies-backend-go/src/websocketutils"
+	"github.com/SelaliAdobor/henchies-backend-go/src/websocketutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -18,6 +19,7 @@ var websocketUpgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+// GetStateUpdates creates a WebSocket connection that will
 func (c *Controllers) GetStateUpdates(ctx *gin.Context) {
 	var request schema.GetGameStateRequest
 	if err := ctx.ShouldBindQuery(&request); err != nil {
@@ -61,23 +63,13 @@ func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, 
 
 	for {
 		select {
-		case player, ok := <-playerStateChan:
-			if !ok {
+		case playerState, ok := <-playerStateChan:
+			if err = writeStateUpdate(conn, playerState, ok); err != nil {
 				isClosed = true
 				break
 			}
-			err = websocketutil.WriteValueToWebsocket(player.ToUpdate(), conn)
-			if err != nil {
-				isClosed = true
-				break
-			}
-		case game, ok := <-gameStateChan:
-			if !ok {
-				isClosed = true
-				break
-			}
-			err = websocketutil.WriteValueToWebsocket(game.ToUpdate(), conn)
-			if err != nil {
+		case gameState, ok := <-gameStateChan:
+			if err = writeStateUpdate(conn, gameState, ok); err != nil {
 				isClosed = true
 				break
 			}
@@ -87,4 +79,16 @@ func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, 
 			break
 		}
 	}
+}
+
+func writeStateUpdate(conn *websocket.Conn, value models.StateUpdateField, ok bool) error {
+	if !ok {
+		return errors.New("channel closed")
+	}
+
+	err := websocketutil.WriteValueToWebsocket(value.ToUpdate(), conn)
+	if err != nil {
+		return fmt.Errorf("error writing to websocket: %w", err)
+	}
+	return nil
 }

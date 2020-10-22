@@ -6,18 +6,23 @@ type StateUpdate struct {
 	GameState   *GameState   `json:"gameState"`
 }
 
+// StateUpdateField represents a value held inside a StateUpdate
+type StateUpdateField interface {
+	ToUpdate() StateUpdate
+}
+
 // ToUpdate converts state to an update
-func (s *PlayerState) ToUpdate() StateUpdate {
+func (s PlayerState) ToUpdate() StateUpdate {
 	return StateUpdate{
-		PlayerState: s,
+		PlayerState: &s,
 		GameState:   nil,
 	}
 }
 
 // ToUpdate converts state to an update
-func (s *GameState) ToUpdate() StateUpdate {
+func (s GameState) ToUpdate() StateUpdate {
 	return StateUpdate{
 		PlayerState: nil,
-		GameState:   s,
+		GameState:   &s,
 	}
 }
