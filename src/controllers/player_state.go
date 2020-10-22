@@ -49,6 +49,8 @@ func (c *Controllers) GetPlayerState(ctx *gin.Context) {
 		}
 		return
 	}
+	ctx.Writer.Header().Set("X-Accel-Buffering", "no")
+	ctx.Writer.WriteHeader(http.StatusOK)
 
 	ctx.Stream(func(w io.Writer) bool {
 		if state, ok := <-stateChan; ok {
