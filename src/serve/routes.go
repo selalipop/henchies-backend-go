@@ -9,10 +9,8 @@ import (
 func setupRoutes(g *gin.Engine, c controllers.Controllers) {
 	g.GET("/", c.GetInfo)
 
-	g.GET("/player/state", c.GetPlayerState)
 	g.GET("/player/key", c.GetPlayerGameKey)
-
-	g.GET("/game/state", c.GetGameState)
+	g.GET("/player/updates", c.GetStateUpdates)
 
 	g.POST("/photonwebhooks/roomcreated", c.RoomCreatedWebhook)
 	g.POST("/photonwebhooks/roomclosed", c.RoomClosedWebhook)
