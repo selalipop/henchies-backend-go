@@ -31,6 +31,7 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 	h.Set("Connection", "keep-alive")
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("X-Accel-Buffering", "no")
+	h.Set("Access-Control-Allow-Origin", "*")
 
 	resp.WriteHeader(http.StatusOK)
 	resp.WriteHeaderNow()
