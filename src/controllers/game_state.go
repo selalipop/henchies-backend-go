@@ -23,7 +23,7 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 		logrus.Error("failed to subscribe to game state", err)
 		return
 	}
-	ctx.Header("X-Accel-Buffering", "no")
+	ctx.Writer.Header().Set("X-Accel-Buffering", "no")
 	ctx.Stream(func(w io.Writer) bool {
 		if state, ok := <-stateChan; ok {
 			ctx.SSEvent("message", state)
