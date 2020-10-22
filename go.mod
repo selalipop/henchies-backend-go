@@ -2,6 +2,8 @@ module github.com/SelaliAdobor/henchies-backend-go
 
 go 1.15
 
+// +heroku goVersion 1.15
+
 require (
 	github.com/campoy/jsonenums v0.0.0-20201009151607-0f0230183423 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible
