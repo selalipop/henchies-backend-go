@@ -23,9 +23,13 @@ func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 
 	logrus.Debugf("processing player joined event from Photon: %+v", request)
 
-	err := c.Repository.UpdatePlayerStateUnchecked(ctx, request.GameID, request.PlayerID, func(state models.PlayerState) models.PlayerState {
+	c.processPlayerJoined(ctx, request.GameID, request.PlayerID)
+}
+
+func (c *Controllers) processPlayerJoined(ctx *gin.Context, gameID models.GameID, playerID models.PlayerID) {
+	err := c.Repository.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {
 		state = models.PlayerState{
-			CurrentGame: request.GameID,
+			CurrentGame: gameID,
 		}
 		return state
 	})
@@ -34,19 +38,19 @@ func (c *Controllers) PlayerJoinedWebhook(ctx *gin.Context) {
 		writeInternalErrorResponse(ctx, err)
 		return
 	}
-	err = c.Repository.UpdateGameState(ctx, request.GameID, func(gameState models.GameState) models.GameState {
-		if gameState.Players.Contains(request.PlayerID) {
-			logrus.Debugf("received player joined but player was already in game: %+v", request)
+	err = c.Repository.UpdateGameState(ctx, gameID, func(gameState models.GameState) models.GameState {
+		if gameState.Players.Contains(playerID) {
+			logrus.Debugf("received player joined but player was already in game:%+v player: %+v", gameID, playerID)
 			return gameState
 		}
 
-		gameState.Players = append(gameState.Players, request.PlayerID)
+		gameState.Players = append(gameState.Players, playerID)
 
 		if len(gameState.Players) == gameState.MaxPlayers {
-			logrus.Debugf("starting game after player joined: %+v", request)
+			logrus.Debugf("starting game after player joined: game:%+v player: %+v", gameID, playerID)
 
 			gameState.Phase = models.Starting
-			go startGame(ctx, request.GameID, c)
+			go startGame(ctx, gameID, c)
 		}
 		return gameState
 	})

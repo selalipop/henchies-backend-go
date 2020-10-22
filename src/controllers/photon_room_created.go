@@ -26,6 +26,13 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 	}
 
 	err := c.Repository.InitGameState(ctx, request.GameID, request.CreateOptions.MaxPlayers, imposterCount)
+	if err != nil {
+		logrus.Errorf("failed to initalize game state on room created event: %+v err: %+v", request, err)
+		writeInternalErrorResponse(ctx, err)
+	}
 
-	writeSuccessIfNoErrors(ctx, err)
+	if !request.CreateOptions.CustomProperties.ServerCreatedRoom {
+		// Photon Treats the RoomCreated webhook as a proxy for PlayerJoined in some cases
+		c.processPlayerJoined(ctx, request.GameID, request.PlayerID)
+	}
 }

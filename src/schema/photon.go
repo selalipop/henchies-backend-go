@@ -21,7 +21,8 @@ type PhotonExtendedArgs struct {
 
 // CustomRoomProperties represents custom properties sent during room creation
 type CustomRoomProperties struct {
-	ImposterCount int `json:"ImposterCount"`
+	ImposterCount     int  `json:"ImposterCount"`
+	ServerCreatedRoom bool `json:"ServerCreatedRoom"`
 }
 
 // CreateOptions represents options sent during room creation
