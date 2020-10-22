@@ -17,11 +17,11 @@ func (c *Controllers) GetPlayerGameKey(ctx *gin.Context) {
 		writeInvalidRequestResponse(ctx, err)
 		return
 	}
-	id, err := c.Repository.GetPlayerGameKey(ctx, request.GameID, request.PlayerID, ctx.ClientIP())
+	key, err := c.Repository.GetPlayerGameKey(ctx, request.GameID, request.PlayerID, ctx.ClientIP())
 	if err != nil {
 		logrus.Errorf("failed to get player game key: %v", err)
 		writeInternalErrorResponse(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"id": id})
+	ctx.JSON(http.StatusOK, key)
 }
