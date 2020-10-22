@@ -1,12 +1,12 @@
 package controllers
 
 import (
+	"github.com/SelaliAdobor/henchies-backend-go/src/ginutil"
 	"github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/repository"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"io"
 	"net/http"
 )
 
@@ -50,21 +50,12 @@ func (c *Controllers) GetPlayerState(ctx *gin.Context) {
 		return
 	}
 
-	resp := ctx.Writer
-	h := resp.Header()
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("X-Accel-Buffering", "no")
-
-	resp.WriteHeader(http.StatusOK)
-	resp.Flush()
-
-	ctx.Stream(func(w io.Writer) bool {
-		if state, ok := <-stateChan; ok {
-			ctx.SSEvent("message", state)
-			return true
+	channel := make(chan interface{})
+	go func() {
+		defer close(channel)
+		for state := range stateChan {
+			channel <- state
 		}
-		return false
-	})
+	}()
+	ginutil.ChannelToServerSentEvents(ctx, channel)
 }

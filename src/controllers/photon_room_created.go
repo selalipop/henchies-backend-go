@@ -12,6 +12,7 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 	var request schema.RoomCreatedRequest
 
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		logrus.Debugf("failed to parse room created event from Photon: %v", err)
 		writeInvalidRequestResponse(ctx, err)
 		return
 	}

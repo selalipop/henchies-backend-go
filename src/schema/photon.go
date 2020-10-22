@@ -13,7 +13,7 @@ type PhotonArgs struct {
 
 // PhotonExtendedArgs represents extended set of arguments sent by Photon to all webhooks besides RoomClosed
 type PhotonExtendedArgs struct {
-	ActorNr  string          `json:"ActorNr"`
+	ActorNr  int             `json:"ActorNr"`
 	PlayerID models.PlayerID `json:"UserId"`
 	NickName string          `json:"NickName"`
 	PhotonArgs

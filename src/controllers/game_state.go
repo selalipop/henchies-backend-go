@@ -1,12 +1,11 @@
 package controllers
 
 import (
+	"github.com/SelaliAdobor/henchies-backend-go/src/ginutil"
 	"github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"io"
-	"net/http"
 )
 
 //  GetGameState returns a SSE stream of Game State Changes
@@ -25,26 +24,11 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 		return
 	}
 
-	resp := ctx.Writer
-	h := resp.Header()
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("X-Accel-Buffering", "no")
-	h.Set("Access-Control-Allow-Origin", "*")
-
-	resp.WriteHeader(http.StatusOK)
-	resp.WriteHeaderNow()
-	resp.Flush()
-	logrus.Trace("wrote headers")
-
-	ctx.Stream(func(w io.Writer) bool {
-		if state, ok := <-stateChan; ok {
-			logrus.Trace("writing message")
-			ctx.SSEvent("message", state)
-			logrus.Trace("wrote message")
-			return true
+	channel := make(chan interface{})
+	go func() {
+		for state := range stateChan {
+			channel <- state
 		}
-		return false
-	})
+	}()
+	ginutil.ChannelToServerSentEvents(ctx, channel)
 }
