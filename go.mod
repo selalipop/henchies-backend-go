@@ -12,7 +12,7 @@ require (
 	github.com/go-openapi/swag v0.19.10 // indirect
 	github.com/go-redis/redis/v8 v8.3.0
 	github.com/google/uuid v1.1.2
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.4.2
 	github.com/hhatto/gocloc v0.3.3 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kr/pty v1.1.5 // indirect
