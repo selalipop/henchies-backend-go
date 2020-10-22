@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"time"
 )
 
 var websocketUpgrader = websocket.Upgrader{
@@ -18,6 +19,9 @@ var websocketUpgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
+
+const pingInterval = 30 * time.Second
+const maxInactiveInterval = 5 * time.Minute
 
 // GetStateUpdates creates a WebSocket connection that will
 func (c *Controllers) GetStateUpdates(ctx *gin.Context) {
@@ -60,6 +64,15 @@ func (c *Controllers) GetStateUpdates(ctx *gin.Context) {
 func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, conn *websocket.Conn, gameStateChan chan models.GameState) {
 	isClosed := false
 	var err error
+	pingTicker := time.NewTicker(pingInterval)
+	inactivityTimer := time.NewTimer(maxInactiveInterval)
+
+	resetInactivity := func() {
+		if !inactivityTimer.Stop() {
+			<-inactivityTimer.C
+		}
+		inactivityTimer.Reset(maxInactiveInterval)
+	}
 
 	for {
 		select {
@@ -68,11 +81,21 @@ func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, 
 				isClosed = true
 				break
 			}
+			resetInactivity()
 		case gameState, ok := <-gameStateChan:
 			if err = writeStateUpdate(conn, gameState, ok); err != nil {
 				isClosed = true
 				break
 			}
+			resetInactivity()
+		case _, ok := <-pingTicker.C:
+			if err = writeStateUpdate(conn, models.PingUpdate, ok); err != nil {
+				isClosed = true
+				break
+			}
+		case <-inactivityTimer.C:
+			isClosed = true
+			err = errors.New("inactivity timer triggered")
 		}
 		if isClosed {
 			logrus.Errorf("failed to write update to state update socket: %v", err)
