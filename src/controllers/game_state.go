@@ -33,6 +33,7 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 	h.Set("X-Accel-Buffering", "no")
 
 	resp.WriteHeader(http.StatusOK)
+	resp.WriteHeaderNow()
 	resp.Flush()
 	logrus.Trace("wrote headers")
 
@@ -40,6 +41,7 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 		if state, ok := <-stateChan; ok {
 			logrus.Trace("writing message")
 			ctx.SSEvent("message", state)
+			logrus.Trace("wrote message")
 			return true
 		}
 		return false
