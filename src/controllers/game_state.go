@@ -1,21 +1,12 @@
 package controllers
 
 import (
-	"fmt"
 	"github.com/SelaliAdobor/henchies-backend-go/src/models"
 	"github.com/SelaliAdobor/henchies-backend-go/src/schema"
-	"github.com/SelaliAdobor/henchies-backend-go/src/websocketutils"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
-	"net/http"
+	"io"
 )
-
-var gameStateUpdater = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
 
 //  GetGameState returns a SSE stream of Game State Changes
 func (c *Controllers) GetGameState(ctx *gin.Context) {
@@ -33,21 +24,11 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 		return
 	}
 
-	conn, err := gameStateUpdater.Upgrade(ctx.Writer, ctx.Request, nil)
-	if err != nil {
-		writeInternalErrorResponse(ctx, fmt.Errorf("failed to upgrade websocket: %w", err))
-		return
-	}
-
-	for {
-		state, ok := <-stateChan
-		if !ok {
-			break
+	ctx.Stream(func(w io.Writer) bool {
+		if state, ok := <-stateChan; ok {
+			ctx.SSEvent("message", state)
+			return true
 		}
-		err := websocketutils.WriteValueToWebsocket(state, conn)
-		if err != nil {
-			logrus.Errorf("failed to write update to player state socket: %v", err)
-			break
-		}
-	}
+		return false
+	})
 }
