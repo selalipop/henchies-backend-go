@@ -7,6 +7,8 @@ import (
 	"math"
 )
 
+const gameLobbyId = "GameLobby"
+
 // RoomCreatedWebhook is called by Photon during a room being created
 func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 	var request schema.RoomCreatedRequest
@@ -19,8 +21,8 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 
 	logrus.Debugf("processing room created event from Photon: %+v", request)
 
-	if !request.CreateOptions.CustomProperties.IsHenchiesGame {
-		logrus.Debugf("ignoring room created due to missing IsHenchiesGame property: %+v", request)
+	if request.CreateOptions.LobbyID != gameLobbyId {
+		logrus.Debugf("ignoring room created outside of game lobby: %+v", request)
 		writeSuccessIfNoErrors(ctx)
 	}
 
@@ -32,7 +34,7 @@ func (c *Controllers) RoomCreatedWebhook(ctx *gin.Context) {
 
 	err := c.Repository.InitGameState(ctx, request.GameID, request.CreateOptions.MaxPlayers, imposterCount)
 	if err != nil {
-		logrus.Errorf("failed to initalize game state on room created event: %+v err: %+v", request, err)
+		logrus.Errorf("failed to initialize game state on room created event: %+v err: %+v", request, err)
 		writeInternalErrorResponse(ctx, err)
 	}
 
