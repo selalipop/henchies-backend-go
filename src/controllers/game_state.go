@@ -34,9 +34,11 @@ func (c *Controllers) GetGameState(ctx *gin.Context) {
 
 	resp.WriteHeader(http.StatusOK)
 	resp.Flush()
+	logrus.Trace("wrote headers")
 
 	ctx.Stream(func(w io.Writer) bool {
 		if state, ok := <-stateChan; ok {
+			logrus.Trace("writing message")
 			ctx.SSEvent("message", state)
 			return true
 		}
