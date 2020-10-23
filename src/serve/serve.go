@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/SelaliAdobor/henchies-backend-go/src/controllers"
 	"github.com/SelaliAdobor/henchies-backend-go/src/repository"
-
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
@@ -26,7 +26,11 @@ func main() {
 
 	logger := logrus.StandardLogger()
 	logger.SetLevel(logrus.TraceLevel)
-	g.Use(ginlogrus.Logger(logger), gin.Recovery())
+
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+
+	g.Use(ginlogrus.Logger(logger), gin.Recovery(), cors.New(config))
 
 	setupRoutes(g, c)
 

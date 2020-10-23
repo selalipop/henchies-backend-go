@@ -9,12 +9,13 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/elliotchance/pie v1.38.0
+	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-openapi/spec v0.19.10 // indirect
 	github.com/go-openapi/swag v0.19.10 // indirect
 	github.com/go-redis/redis/v8 v8.3.0
 	github.com/google/uuid v1.1.2
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.4.2
 	github.com/hhatto/gocloc v0.3.3 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kr/pty v1.1.5 // indirect
