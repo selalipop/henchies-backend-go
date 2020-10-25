@@ -32,7 +32,7 @@ func (c *Controllers) GetStateUpdates(ctx *gin.Context) {
 		return
 	}
 	playerKey := models.PlayerGameKey{Key: request.PlayerKey, OwnerIP: ctx.ClientIP()}
-	playerStateChan, err := c.Repository.SubscribePlayerState(ctx, request.GameID, request.PlayerID, playerKey)
+	playerFinished, playerStateChan, err := c.Repository.SubscribePlayerState(ctx, request.GameID, request.PlayerID, playerKey)
 
 	if err != nil {
 		if err == repository.UnauthorizedPlayer {
@@ -45,7 +45,7 @@ func (c *Controllers) GetStateUpdates(ctx *gin.Context) {
 		return
 	}
 
-	gameStateChan, err := c.Repository.SubscribeGameState(ctx, request.GameID, request.PlayerID, models.PlayerGameKey{Key: request.PlayerKey, OwnerIP: ctx.ClientIP()})
+	gameFinished, gameStateChan, err := c.Repository.SubscribeGameState(ctx, request.GameID, request.PlayerID, models.PlayerGameKey{Key: request.PlayerKey, OwnerIP: ctx.ClientIP()})
 
 	if err != nil {
 		logrus.Error("failed to subscribe to game state", err)
@@ -58,12 +58,19 @@ func (c *Controllers) GetStateUpdates(ctx *gin.Context) {
 		writeInternalErrorResponse(ctx, fmt.Errorf("failed to upgrade websocket: %w", err))
 		return
 	}
-	c.sendStateUpdates(playerStateChan, conn, gameStateChan)
+	c.sendStateUpdates(playerStateChan, conn, gameStateChan, gameFinished, playerFinished)
 }
 
-func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, conn *websocket.Conn, gameStateChan chan models.GameState) {
+func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, conn *websocket.Conn, gameStateChan chan models.GameState, gameFinished chan struct{}, playerFinished chan struct{}) {
 	isClosed := false
 	var err error
+
+	defer close(gameStateChan)
+	defer close(playerStateChan)
+
+	defer close(playerFinished)
+	defer close(gameFinished)
+
 	pingTicker := time.NewTicker(pingInterval)
 	inactivityTimer := time.NewTimer(maxInactiveInterval)
 

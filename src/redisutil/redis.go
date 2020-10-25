@@ -26,13 +26,21 @@ func GetRedisJSON(ctx context.Context, client *redis.Client, key string, marshal
 
 // SubscribeJSON retrieves a JSON serialized value from Redis and listens for updates to it's value, marshalTo must be a pointer
 // The initial value is fetched and sent using getKey, use an empty string to disable this behavior
-func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pubSubKey string, marshalTo interface{}) (channel chan interface{}, err error) {
-	listen := client.Subscribe(ctx, pubSubKey).Channel()
+func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pubSubKey string, marshalTo interface{}) (finished chan struct{}, channel chan interface{}, err error) {
+	pubSub := client.Subscribe(ctx, pubSubKey)
+	listen := pubSub.Channel()
 
 	send := make(chan interface{})
-
+	finished = make(chan struct{})
 	go func() {
 		defer close(send)
+		defer func() {
+			err := pubSub.Close()
+			if err != nil {
+				logrus.Errorf("failed to close redis pubsub: %v", err)
+			}
+		}()
+
 		if getKey != "" {
 			err := GetRedisJSON(ctx, client, getKey, marshalTo)
 			if err != nil {
@@ -43,21 +51,26 @@ func SubscribeJSON(ctx context.Context, client *redis.Client, getKey string, pub
 		}
 
 		for {
-			message, ok := <-listen
-			if !ok {
-				return
-			}
+			select {
+			case message, ok := <-listen:
+				if !ok {
+					break
+				}
 
-			err := json.Unmarshal([]byte(message.Payload), marshalTo)
-			if err != nil {
-				logrus.Error("failed to unmarshal game state from pubsub", err)
+				err := json.Unmarshal([]byte(message.Payload), marshalTo)
+				if err != nil {
+					logrus.Error("failed to unmarshal game state from pubsub", err)
+					break
+				}
+				send <- marshalTo
+
+			case <-finished:
 				break
 			}
-			send <- marshalTo
 		}
 	}()
 
-	return send, nil
+	return finished, send, nil
 }
 
 // UpdateKeyTransaction updates a JSON serialized value from Redis transactionally

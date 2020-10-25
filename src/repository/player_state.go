@@ -16,10 +16,10 @@ const playerIDTTL = 7200 * time.Second
 // Will immediately return current player state state
 // Returns UnauthorizedPlayer error if the player key is not authorized to subscribe to this player
 func (r *Repository) SubscribePlayerState(ctx context.Context,
-	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey) (channel chan models.PlayerState, err error) {
+	gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey) (closeChannel chan struct{}, channel chan models.PlayerState, err error) {
 	err = r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	stateKey := redisKeyPlayerState(gameID, playerID)
@@ -27,13 +27,12 @@ func (r *Repository) SubscribePlayerState(ctx context.Context,
 
 	var playerState models.PlayerState
 
-	subscription, err := redisutil.SubscribeJSON(ctx, r.RedisClient, stateKey, publishKey, &playerState)
+	finished, subscription, err := redisutil.SubscribeJSON(ctx, r.RedisClient, stateKey, publishKey, &playerState)
 	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to player state in redis %w", err)
+		return nil, nil, fmt.Errorf("failed to subscribe to player state in redis %w", err)
 	}
 
 	channel = make(chan models.PlayerState)
-
 	go func() {
 		defer close(channel)
 		for {
@@ -44,7 +43,7 @@ func (r *Repository) SubscribePlayerState(ctx context.Context,
 			channel <- *latest.(*models.PlayerState)
 		}
 	}()
-	return channel, nil
+	return finished, channel, nil
 }
 
 // GetPlayerStateChecked retrieves current player state, checks for a valid player key

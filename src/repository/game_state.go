@@ -114,21 +114,16 @@ func (r *Repository) ClearGameState(ctx context.Context, gameID models.GameID) e
 // SubscribeGameState returns a channel that passes on updates to Game State
 // Will immediately return current game state
 // Returns UnauthorizedPlayer error if the player key is not authorized to subscribe to this game
-func (r *Repository) SubscribeGameState(
-	ctx context.Context,
-	gameID models.GameID,
-	playerID models.PlayerID,
-	playerKey models.PlayerGameKey,
-) (channel chan models.GameState, err error) {
+func (r *Repository) SubscribeGameState(ctx context.Context, gameID models.GameID, playerID models.PlayerID, playerKey models.PlayerGameKey) (finished chan struct{}, channel chan models.GameState, err error) {
 	err = r.CheckPlayerKey(ctx, gameID, playerID, playerKey)
 	if err != nil {
-		return nil, err
+		return finished, nil, err
 	}
 
 	var gameState models.GameState
-	subscription, err := redisutil.SubscribeJSON(ctx, r.RedisClient, redisKeyGameState(gameID), redisPublishKeyGameState(gameID), &gameState)
+	finished, subscription, err := redisutil.SubscribeJSON(ctx, r.RedisClient, redisKeyGameState(gameID), redisPublishKeyGameState(gameID), &gameState)
 	if err != nil {
-		return nil, err
+		return finished, nil, err
 	}
 	channel = make(chan models.GameState)
 	go func() {
@@ -141,7 +136,7 @@ func (r *Repository) SubscribeGameState(
 			channel <- *latest.(*models.GameState)
 		}
 	}()
-	return channel, nil
+	return finished, channel, nil
 }
 func internalUpdateGameStateTx(ctx context.Context, client *redis.Client, gameID models.GameID, update func(gameState models.GameState) models.GameState) error {
 	return internalUpdateGameStateTxPtr(ctx, client, gameID, func(gameState *models.GameState) *models.GameState {
