@@ -77,7 +77,7 @@ func startGame(ctx context.Context, gameID models.GameID, env *Controllers) {
 		// Also assigns a color TODO: Accept preferred colors from in-game preferences
 		gameState.Players = gameState.Players.Shuffle(randSource)
 
-		remainingColors := models.GetSelectableColors()
+		remainingColors := models.GetSelectableColors().Shuffle(randSource)
 
 		for index, playerID := range gameState.Players {
 			err := env.Repository.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {

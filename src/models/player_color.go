@@ -5,7 +5,7 @@ package models
 type PlayerColor int
 
 // PlayerColors represents a list of PlayerColors
-//go:generate pie PlayerColors.DropTop
+//go:generate pie PlayerColors.DropTop.Shuffle
 type PlayerColors []PlayerColor
 
 // Color Values
