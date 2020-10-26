@@ -65,9 +65,6 @@ func (c *Controllers) sendStateUpdates(playerStateChan chan models.PlayerState, 
 	isClosed := false
 	var err error
 
-	defer close(gameStateChan)
-	defer close(playerStateChan)
-
 	defer close(playerFinished)
 	defer close(gameFinished)
 
