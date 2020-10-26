@@ -5,19 +5,29 @@ import (
 	"math/rand"
 )
 
-// DropTop will return the rest slice after dropping the top n elements
-// if the slice has less elements then n that'll return empty slice
-// if n < 0 it'll return empty slice.
-func (ss PlayerColors) DropTop(n int) (drop PlayerColors) {
-	if n < 0 || n >= len(ss) {
-		return
+// Contains returns true if the element exists in the slice.
+//
+// When using slices of pointers it will only compare by address, not value.
+func (ss GameStatePlayers) Contains(lookingFor GameStatePlayer) bool {
+	for _, s := range ss {
+		if lookingFor == s {
+			return true
+		}
 	}
 
-	// Copy ss, to make sure no memory is overlapping between input and
-	// output. See issue #145.
-	drop = make([]PlayerColor, len(ss)-n)
-	copy(drop, ss[n:])
+	return false
+}
 
+// Filter will return a new slice containing only the elements that return
+// true from the condition. The returned slice may contain zero elements (nil).
+//
+// FilterNot works in the opposite way of Filter.
+func (ss GameStatePlayers) Filter(condition func(GameStatePlayer) bool) (ss2 GameStatePlayers) {
+	for _, s := range ss {
+		if condition(s) {
+			ss2 = append(ss2, s)
+		}
+	}
 	return
 }
 
@@ -25,7 +35,7 @@ func (ss PlayerColors) DropTop(n int) (drop PlayerColors) {
 // It follows the same logic as the findIndex() function in Javascript.
 //
 // If the list is empty then -1 is always returned.
-func (ss PlayerColors) FindFirstUsing(fn func(value PlayerColor) bool) int {
+func (ss GameStatePlayers) FindFirstUsing(fn func(value GameStatePlayer) bool) int {
 	for idx, value := range ss {
 		if fn(value) {
 			return idx
@@ -36,7 +46,7 @@ func (ss PlayerColors) FindFirstUsing(fn func(value PlayerColor) bool) int {
 }
 
 // Shuffle returns shuffled slice by your rand.Source
-func (ss PlayerColors) Shuffle(source rand.Source) PlayerColors {
+func (ss GameStatePlayers) Shuffle(source rand.Source) GameStatePlayers {
 	n := len(ss)
 
 	// Avoid the extra allocation.
@@ -47,7 +57,7 @@ func (ss PlayerColors) Shuffle(source rand.Source) PlayerColors {
 	// go 1.10+ provides rnd.Shuffle. However, to support older versions we copy
 	// the algorithm directly from the go source: src/math/rand/rand.go below,
 	// with some adjustments:
-	shuffled := make([]PlayerColor, n)
+	shuffled := make([]GameStatePlayer, n)
 	copy(shuffled, ss)
 
 	rnd := rand.New(source)

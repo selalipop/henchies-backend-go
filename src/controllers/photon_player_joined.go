@@ -39,12 +39,17 @@ func (c *Controllers) processPlayerJoined(ctx *gin.Context, gameID models.GameID
 		return
 	}
 	err = c.Repository.UpdateGameState(ctx, gameID, func(gameState models.GameState) models.GameState {
-		if gameState.Players.Contains(playerID) {
+		if gameState.Players.GetPlayerByID(playerID) != nil {
 			logrus.Debugf("received player joined but player was already in game:%+v player: %+v", gameID, playerID)
 			return gameState
 		}
 
-		gameState.Players = append(gameState.Players, playerID)
+		newPlayer := models.GameStatePlayer{
+			PlayerID:    playerID,
+			PlayerColor: gameState.Players.GetUnusedColor(),
+		}
+
+		gameState.Players = append(gameState.Players, newPlayer)
 
 		if len(gameState.Players) == gameState.MaxPlayers {
 			logrus.Debugf("starting game after player joined: game:%+v player: %+v", gameID, playerID)
@@ -77,18 +82,14 @@ func startGame(ctx context.Context, gameID models.GameID, env *Controllers) {
 		// Also assigns a color TODO: Accept preferred colors from in-game preferences
 		gameState.Players = gameState.Players.Shuffle(randSource)
 
-		remainingColors := models.GetSelectableColors().Shuffle(randSource)
-
-		for index, playerID := range gameState.Players {
-			err := env.Repository.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {
+		for index, player := range gameState.Players {
+			err := env.Repository.UpdatePlayerStateUnchecked(ctx, gameID, player.PlayerID, func(state models.PlayerState) models.PlayerState {
 				state.IsImposter = index < gameState.ImposterCount
-				state.Color = remainingColors[0]
 				return state
 			})
 			if err != nil {
 				logrus.Errorf("failed to update player state %v", err)
 			}
-			remainingColors = remainingColors.DropTop(1)
 		}
 
 		// Shuffle again so that player list doesn't give away imposters

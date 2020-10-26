@@ -25,12 +25,13 @@ func (c *Controllers) PlayerLeftWebhook(ctx *gin.Context) {
 		return
 	}
 	err = c.Repository.UpdateGameState(ctx, request.GameID, func(gameState models.GameState) models.GameState {
-		if !gameState.Players.Contains(request.PlayerID) {
+		p := gameState.Players.GetPlayerByID(request.PlayerID)
+		if p == nil {
 			return gameState
 		}
 
-		gameState.Players = gameState.Players.Filter(func(playerID models.PlayerID) bool {
-			return playerID != request.PlayerID
+		gameState.Players = gameState.Players.Filter(func(p models.GameStatePlayer) bool {
+			return p.PlayerID != request.PlayerID
 		})
 		return gameState
 	})

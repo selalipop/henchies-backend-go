@@ -31,7 +31,7 @@ func (r *Repository) InitGameState(ctx context.Context, gameID models.GameID, st
 			ImposterCount: imposterCount,
 			MaxPlayers:    startingPlayerCount,
 			Phase:         models.WaitingForPlayers,
-			Players:       []models.PlayerID{},
+			Players:       []models.GameStatePlayer{},
 		}
 	})
 	if err != nil {
@@ -46,35 +46,6 @@ func (r *Repository) checkIfGameExists(ctx context.Context, gameID models.GameID
 		return false, errors.Wrap(err, "error checking if game already exists")
 	}
 	return exists > 0, nil
-}
-
-// AddPlayerToGame adds a player to an existing game
-// Will update game state and player state to reflect current game
-func (r *Repository) AddPlayerToGame(ctx context.Context, gameID models.GameID, playerID models.PlayerID) error {
-	exists, err := r.checkIfGameExists(ctx, gameID)
-	if err != nil {
-		return err
-	}
-
-	if !exists {
-		return errors.New("attempt to add player to non-existent game")
-	}
-
-	err = internalUpdateGameStateTx(ctx, r.RedisClient, gameID, func(gameState models.GameState) models.GameState {
-		if gameState.Players.Contains(playerID) {
-			return gameState
-		}
-		gameState.Players = append(gameState.Players, playerID)
-		return gameState
-	})
-	if err != nil {
-		return errors.Wrap(err, "failed to add player to game")
-	}
-
-	return r.UpdatePlayerStateUnchecked(ctx, gameID, playerID, func(state models.PlayerState) models.PlayerState {
-		state.CurrentGame = gameID
-		return state
-	})
 }
 
 // UpdateGameState updates game state transactionally
@@ -94,13 +65,13 @@ func (r *Repository) UpdateGameState(ctx context.Context, gameID models.GameID, 
 func (r *Repository) ClearGameState(ctx context.Context, gameID models.GameID) error {
 	operation := func() error {
 		return internalUpdateGameStateTxPtr(ctx, r.RedisClient, gameID, func(gameState *models.GameState) *models.GameState {
-			for _, playerID := range gameState.Players {
+			for _, player := range gameState.Players {
 				go func(currentPlayer models.PlayerID) {
 					err := r.ClearPlayerState(ctx, gameID, currentPlayer)
 					if err != nil {
 						logrus.Errorf("failed to clear player state while clearing game state %v", err)
 					}
-				}(playerID)
+				}(player.PlayerID)
 			}
 			return nil
 		})
